@@ -1,0 +1,268 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Plus, DollarSign } from "lucide-react"
+import { getInvoices, createInvoice, updateInvoice, addInvoicePayment } from "../../app/actions/invoice"
+import { getCustomers } from "../../app/actions/arap"
+
+export default function InvoiceManager({ organizationId }: { organizationId: string }) {
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    const [invoicesResult, customersResult] = await Promise.all([
+      getInvoices(),
+      getCustomers(),
+    ])
+    if (invoicesResult.success) setInvoices(invoicesResult.invoices)
+    if (customersResult.success) setCustomers(customersResult.customers)
+    setLoading(false)
+  }
+
+  const handleCreateInvoice = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const formData = new FormData(e.target as HTMLFormElement)
+    
+    const items = [{
+      description: "Jasa/Layanan",
+      quantity: 1,
+      unitPrice: parseFloat(formData.get("amount") as string),
+      discount: 0,
+      taxRate: 0.11,
+      subtotal: parseFloat(formData.get("amount") as string),
+      taxAmount: parseFloat(formData.get("amount") as string) * 0.11,
+      total: parseFloat(formData.get("amount") as string) * 1.11,
+    }]
+    
+    formData.append("items", JSON.stringify(items))
+    formData.append("paymentTerm", "30")
+    
+    await createInvoice(formData)
+    setShowModal(false)
+    loadData()
+  }
+
+  const handleAddPayment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const formData = new FormData(e.target as HTMLFormElement)
+    formData.append("invoiceId", selectedInvoice.id)
+    
+    await addInvoicePayment(formData)
+    setShowPaymentModal(false)
+    setSelectedInvoice(null)
+    loadData()
+  }
+
+  const handleUpdateStatus = async (invoice: any, status: string) => {
+    const formData = new FormData()
+    formData.append("id", invoice.id)
+    formData.append("status", status)
+    
+    await updateInvoice(formData)
+    loadData()
+  }
+
+  return (
+    <div className="p-4 sm:p-6 space-y-4">
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+        >
+          <Plus size={16} />
+          Buat Invoice
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="py-8 text-center text-slate-500">Loading...</div>
+      ) : invoices.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-500">
+          <DollarSign size={40} className="mx-auto mb-2 opacity-50" />
+          <p>Belum ada invoice</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {invoices.map((invoice) => (
+            <div
+              key={invoice.id}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-800">{invoice.invoiceNumber}</span>
+                  <span className="text-xs text-slate-500">{invoice.customer?.name}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                      invoice.status === "PAID" ? "bg-green-100 text-green-800" :
+                      invoice.status === "PARTIALLY_PAID" ? "bg-yellow-100 text-yellow-800" :
+                      invoice.status === "OVERDUE" ? "bg-red-100 text-red-800" :
+                      "bg-slate-100 text-slate-800"
+                    }`}
+                  >
+                    {invoice.status}
+                  </span>
+                </div>
+                <div className="text-sm text-slate-600">
+                  {new Date(invoice.invoiceDate).toLocaleDateString("id-ID")} - Due: {new Date(invoice.dueDate).toLocaleDateString("id-ID")}
+                </div>
+                <div className="text-sm font-medium text-slate-800">
+                  Total: Rp {invoice.totalAmount.toLocaleString("id-ID")} | Paid: Rp {invoice.paidAmount.toLocaleString("id-ID")} | Remaining: Rp {invoice.remainingAmount.toLocaleString("id-ID")}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {invoice.status === "DRAFT" && (
+                  <button
+                    onClick={() => handleUpdateStatus(invoice, "SENT")}
+                    className="rounded-lg px-3 py-1.5 text-sm font-bold text-emerald-600 hover:bg-emerald-50"
+                  >
+                    Kirim
+                  </button>
+                )}
+                {(invoice.status === "SENT" || invoice.status === "PARTIALLY_PAID") && invoice.remainingAmount > 0 && (
+                  <button
+                    onClick={() => {
+                      setSelectedInvoice(invoice)
+                      setShowPaymentModal(true)
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-sm font-bold text-blue-600 hover:bg-blue-50"
+                  >
+                    Bayar
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create Invoice Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-4">Buat Invoice Baru</h3>
+            <form onSubmit={handleCreateInvoice} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Customer</label>
+                <select
+                  name="customerId"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">Pilih Customer</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal Invoice</label>
+                <input
+                  name="invoiceDate"
+                  type="date"
+                  required
+                  defaultValue={new Date().toISOString().split("T")[0]}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Jumlah</label>
+                <input
+                  name="amount"
+                  type="number"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+                >
+                  Buat Invoice
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-4">Tambah Pembayaran</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Invoice: {selectedInvoice.invoiceNumber}<br />
+              Sisa: Rp {selectedInvoice.remainingAmount.toLocaleString("id-ID")}
+            </p>
+            <form onSubmit={handleAddPayment} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Jumlah Pembayaran</label>
+                <input
+                  name="amount"
+                  type="number"
+                  required
+                  max={selectedInvoice.remainingAmount}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal Pembayaran</label>
+                <input
+                  name="paymentDate"
+                  type="date"
+                  required
+                  defaultValue={new Date().toISOString().split("T")[0]}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Metode Pembayaran</label>
+                <select
+                  name="paymentMethod"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="TRANSFER">Transfer</option>
+                  <option value="CASH">Cash</option>
+                  <option value="CHECK">Check</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  Bayar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentModal(false)}
+                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

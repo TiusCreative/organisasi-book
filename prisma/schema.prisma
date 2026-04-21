@@ -1,0 +1,653 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User & Role Management
+enum UserRole {
+  ADMIN
+  MANAGER
+  STAFF
+  VIEWER
+}
+
+enum TaxType {
+  PPH21
+  PPH23
+  PPN
+}
+
+enum TaxSourceType {
+  TRANSACTION
+  PAYROLL
+  MANUAL
+}
+
+model User {
+  id             String           @id @default(uuid())
+  email          String           @unique
+  password       String           // Hashed password
+  name           String
+  phone          String?
+  avatar         String?          // URL avatar
+  role           UserRole         @default(STAFF)
+  permissions    String[]         @default([])
+  isPlatformAdmin Boolean         @default(false)
+  organizationId String?
+  status         String           @default("ACTIVE") // ACTIVE, INACTIVE, PENDING
+  inviteToken    String?          @unique
+  inviteTokenExpiresAt DateTime?
+  resetToken     String?          @unique
+  resetTokenExpiresAt DateTime?
+  passwordSetAt  DateTime?
+  lastLogin      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  auditLogs      AuditLog[]       @relation("UserAuditLog")
+}
+
+// 1. Tabel Organisasi (Multitenant)
+model Organization {
+  id             String           @id @default(uuid())
+  name           String
+  type           String           // YAYASAN atau PERUSAHAAN
+  address        String?          // Alamat
+  city           String?          // Kota
+  province       String?          // Provinsi
+  postalCode     String?          // Kode Pos
+  phone          String?          // Nomor Telepon
+  email          String?          // Email
+  logo           String?          // URL Logo
+  taxId          String?          // NPWP
+  registrationNumber String?      // Nomor Pendaftaran (Akta Notaris / SK Kemenkumham)
+  currency       String           @default("IDR") // Mata uang
+  fiscalYearStart Int             @default(1) // Bulan awal tahun fiskal (1-12)
+  status         String           @default("ACTIVE") // ACTIVE, INACTIVE
+  subscriptionPlan String         @default("ANNUAL")
+  subscriptionStatus String       @default("ACTIVE") // ACTIVE, EXPIRED, SUSPENDED
+  subscriptionStartsAt DateTime?
+  subscriptionEndsAt DateTime?
+  maxUsers       Int              @default(5)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  
+  // Relasi ke tabel lain
+  accounts       ChartOfAccount[]
+  categories     AccountCategory[]
+  banks          BankAccount[]
+  investments    Investment[]
+  transactions   Transaction[]
+  employees      Employee[]
+  salarySlips    SalarySlip[]
+  taxEntries     TaxEntry[]
+  auditLogs      AuditLog[]
+  noteSequences  NoteSequence[]
+  users          User[]
+  subscriptionPayments SubscriptionPayment[]
+  periodLocks    PeriodLock[]
+  customers      Customer[]
+  suppliers      Supplier[]
+  invoices       Invoice[]
+  vendorBills    VendorBill[]
+  invoicePayments InvoicePayment[]
+  vendorBillPayments VendorBillPayment[]
+  purchaseOrders PurchaseOrder[]
+}
+
+// 2. Tabel Kategori Akun
+model AccountCategory {
+  id             String           @id @default(uuid())
+  organizationId String
+  name           String           // Contoh: Gaji, Bonus, Uang Makan, dll
+  color          String           @default("#3B82F6")
+  
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  accounts       ChartOfAccount[]
+}
+
+// 3. Tabel Daftar Akun (COA)
+model ChartOfAccount {
+  id             String           @id @default(uuid())
+  organizationId String
+  categoryId     String?          // Relasi ke AccountCategory
+  code           String
+  name           String
+  type           String           // Asset, Liability, Equity, Revenue, Expense
+  isHeader       Boolean          @default(false)
+
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  category       AccountCategory? @relation(fields: [categoryId], references: [id])
+  bankAccount    BankAccount?     // Relasi 1-to-1: 1 Akun bisa jadi 1 Rekening Bank
+  investment     Investment?      // Relasi 1-to-1: 1 Akun bisa jadi 1 investasi
+  journalItems   TransactionLine[]
+}
+
+// 4. Tabel Rekening Bank (Buku Pembantu Bank)
+model BankAccount {
+  id             String           @id @default(uuid())
+  organizationId String
+  accountId      String           @unique // Terhubung langsung ke ChartOfAccount
+  bankName       String           // Contoh: BCA, Mandiri, BSI
+  accountNumber  String           // Nomor Rekening
+  accountName    String           // Atas Nama
+  balance        Float            @default(0) // Saldo Rekening
+  lastReconciled DateTime?        // Tanggal last reconciliation
+  notes          String?          // Catatan reconciliation
+  status         String           @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  account        ChartOfAccount   @relation(fields: [accountId], references: [id])
+  sourceInvestments Investment[]  @relation("InvestmentSourceBank")
+  settlementInvestments Investment[] @relation("InvestmentSettlementBank")
+}
+
+model Investment {
+  id                     String         @id @default(uuid())
+  organizationId         String
+  accountId              String         @unique
+  sourceBankAccountId    String?
+  settlementBankAccountId String?
+  inkasoTransactionId    String?        @unique
+  type                   String         // DEPOSITO, SAHAM, INVESTASI_LAINNYA
+  name                   String
+  institution            String
+  referenceNumber        String?
+  startDate              DateTime
+  maturityDate           DateTime?
+  purchaseAmount         Float
+  currentValue           Float
+  expectedReturn         Float          @default(0)
+  status                 String         @default("ACTIVE") // ACTIVE, MATURED, LIQUIDATED
+  notes                  String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  organization           Organization   @relation(fields: [organizationId], references: [id])
+  account                ChartOfAccount @relation(fields: [accountId], references: [id])
+  sourceBankAccount      BankAccount?   @relation("InvestmentSourceBank", fields: [sourceBankAccountId], references: [id])
+  settlementBankAccount  BankAccount?   @relation("InvestmentSettlementBank", fields: [settlementBankAccountId], references: [id])
+  inkasoTransaction      Transaction?   @relation("InvestmentInkasoTransaction", fields: [inkasoTransactionId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, type])
+}
+
+// 4. Tabel Header Transaksi (Nota/Jurnal)
+model Transaction {
+  id             String           @id @default(uuid())
+  organizationId String
+  date           DateTime         @default(now())
+  description    String           // Keterangan transaksi (misal: "Bayar Listrik Bulan April")
+  reference      String?          // Nomor Nota / Invoice (bisa untuk PDF/WA)
+  createdAt      DateTime         @default(now())
+
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  lines          TransactionLine[]
+  taxEntries     TaxEntry[]
+  investmentInkaso Investment?    @relation("InvestmentInkasoTransaction")
+}
+
+// 5. Tabel Detail Transaksi (Debit & Kredit)
+model TransactionLine {
+  id             String           @id @default(uuid())
+  transactionId  String
+  accountId      String
+  debit          Float            @default(0)
+  credit         Float            @default(0)
+  description    String?          // Keterangan tambahan
+
+  // Cascade: Jika Transaksi dihapus, baris detailnya ikut terhapus
+  transaction    Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account        ChartOfAccount   @relation(fields: [accountId], references: [id])
+}
+
+// 6. Tabel Karyawan
+model Employee {
+  id              String           @id @default(uuid())
+  organizationId  String
+  name            String           // Nama lengkap
+  nik             String?          // Nomor Induk Karyawan
+  employeeNumber  String?          // Nomor Pegawai (bisa sama dengan NIK)
+  email           String?
+  phone           String?
+  identityNumber  String?          // KTP/SIM/Paspor
+  identityType    String?          // Type: KTP, SIM, Paspor
+  taxFileNumber   String?          // NPWP
+  bankAccount     String?          // Nomor rekening untuk giro
+  bankName        String?          // Nama bank
+  position        String           // Jabatan
+  department      String?          // Departemen
+  joinDate        DateTime         // Tanggal bergabung
+  exitDate        DateTime?        // Tanggal keluar (null jika masih aktif)
+  baseSalary      Float            // Gaji pokok
+  taxStatus       String           @default("TK") // Status pajak: TK, K, K1, K2, K3
+  bpjsKesehatanNumber String?      // Nomor BPJS Kesehatan
+  bpjsKetenagakerjaan String?      // Nomor BPJS Ketenagakerjaan
+  status          String           @default("ACTIVE") // ACTIVE, INACTIVE, LEAVE
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  salarySlips     SalarySlip[]
+  allowances      Allowance[]
+  deductions      Deduction[]
+}
+
+// 7. Tabel Tunjangan (Allowances)
+model Allowance {
+  id              String           @id @default(uuid())
+  employeeId      String
+  name            String           // Nama tunjangan: Tunjangan Transport, Tunjangan Makan, dll
+  amount          Float            // Nominal tunjangan
+  effectiveDate   DateTime         // Mulai berlaku
+  endDate         DateTime?        // Berakhir (null jika permanent)
+  isTaxable       Boolean          @default(true) // Apakah kena pajak
+  createdAt       DateTime         @default(now())
+
+  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// 8. Tabel Potongan (Deductions)
+model Deduction {
+  id              String           @id @default(uuid())
+  employeeId      String
+  name            String           // Nama potongan: Pinjaman, Cicilan, dll
+  amount          Float            // Nominal potongan
+  effectiveDate   DateTime         // Mulai berlaku
+  endDate         DateTime?        // Berakhir (null jika permanent)
+  createdAt       DateTime         @default(now())
+
+  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// 9. Tabel Slip Gaji
+model SalarySlip {
+  id              String           @id @default(uuid())
+  organizationId  String
+  employeeId      String
+  month           Int              // Bulan (1-12)
+  year            Int              // Tahun
+  baseSalary      Float
+  totalAllowance  Float            @default(0)
+  totalDeduction  Float            @default(0)
+  bpjsKesehatanEmployee Float       @default(0) // 4%
+  bpjsKetenagakerjaan Float        @default(0) // 2%
+  pph21           Float            @default(0) // PPh 21
+  grossIncome     Float            // Gaji Bruto = Gaji Pokok + Tunjangan
+  netIncome       Float            // Gaji Netto = Gross - Semua Potongan
+  status          String           @default("DRAFT") // DRAFT, FINALIZED, PAID, CANCELLED
+  paymentDate     DateTime?        // Tanggal pembayaran
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  taxEntries      TaxEntry[]
+
+  // Unique constraint: 1 karyawan hanya bisa punya 1 slip per bulan
+  @@unique([employeeId, month, year])
+}
+
+model TaxEntry {
+  id              String           @id @default(uuid())
+  organizationId  String
+  transactionId   String?
+  salarySlipId    String?
+  sourceType      TaxSourceType
+  taxType         TaxType
+  date            DateTime         @default(now())
+  periodMonth     Int
+  periodYear      Int
+  taxBase         Float            @default(0)
+  taxAmount       Float
+  reference       String?
+  description     String
+  counterparty    String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transaction     Transaction?     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  salarySlip      SalarySlip?      @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, periodYear, periodMonth])
+  @@index([taxType, periodYear, periodMonth])
+  @@index([transactionId])
+  @@index([salarySlipId])
+}
+
+// 10. Tabel Audit Logs (Keamanan & Audit Trail)
+model AuditLog {
+  id              String           @id @default(uuid())
+  organizationId  String?
+  userId          String?          // ID user yang melakukan perubahan
+  action          String           // CREATE, UPDATE, DELETE, READ, EXPORT
+  entity          String           // Nama tabel yang diubah: Transaction, Employee, SalarySlip, dll
+  entityId        String           // ID record yang diubah
+  userName        String?          // Nama user
+  userEmail       String?          // Email user
+  oldData         String?          // Data sebelum perubahan (JSON)
+  newData         String?          // Data setelah perubahan (JSON)
+  changes         String?          // Summary perubahan spesifik (JSON)
+  reason          String?          // Alasan perubahan
+  ipAddress       String?          // IP address user
+  userAgent       String?          // User agent browser
+  timestamp       DateTime         @default(now())
+  status          String           @default("SUCCESS") // SUCCESS, FAILED
+  errorMessage    String?          // Pesan error jika gagal
+  
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user            User?            @relation("UserAuditLog", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([entityId])
+  @@index([timestamp])
+}
+
+// 11. Tabel Sequence Nota (untuk auto-increment nota)
+model NoteSequence {
+  id              String           @id @default(uuid())
+  organizationId  String
+  code            String           // Kode nota: BKK, BKM, BMP, dll
+  year            Int              // Tahun
+  sequence        Int              @default(0) // Urutan nota tahun ini
+  prefix          String?          // Prefix custom (misal: "INV-")
+  lastNote        String?          // Nomor nota terakhir yang digunakan
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code, year])
+  @@index([organizationId])
+}
+
+model SubscriptionPayment {
+  id              String         @id @default(uuid())
+  organizationId  String
+  orderId         String         @unique
+  provider        String         @default("MIDTRANS")
+  plan            String         @default("ANNUAL")
+  years           Int            @default(1)
+  amount          Float
+  currency        String         @default("IDR")
+  status          String         @default("PENDING") // PENDING, SETTLEMENT, EXPIRE, CANCEL, DENY
+  paymentType     String?
+  transactionId   String?
+  snapToken       String?
+  redirectUrl     String?
+  paidAt          DateTime?
+  expiresAt       DateTime?
+  lastPayload     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([orderId])
+}
+
+// 12. Period Lock - Tutup Buku
+model PeriodLock {
+  id              String           @id @default(uuid())
+  organizationId  String
+  year            Int
+  month           Int              // NULL untuk lock seluruh tahun
+  lockType        String           @default("PERIOD") // PERIOD, YEAR, FULL
+  lockedAt        DateTime         @default(now())
+  lockedBy        String           // User ID
+  lockedByName    String?          // User name untuk reference
+  reason          String?
+  isLocked        Boolean          @default(true)
+  unlockedAt      DateTime?
+  unlockedBy      String?          // User ID
+  unlockedByName  String?
+  unlockReason    String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, year, month])
+  @@index([organizationId, year])
+  @@index([organizationId, isLocked])
+}
+
+// 13. AR/AP - Customer (Account Receivable)
+model Customer {
+  id              String           @id @default(uuid())
+  organizationId  String
+  code            String           // Kode customer: CUST-001
+  name            String           // Nama customer
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  npwp            String?          // NPWP untuk faktur pajak
+  creditLimit     Float            @default(0) // Limit kredit
+  paymentTerm     Int              @default(30) // Term pembayaran (hari)
+  status          String           @default("ACTIVE") // ACTIVE, INACTIVE
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices        Invoice[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+}
+
+// 14. AR/AP - Supplier (Account Payable)
+model Supplier {
+  id              String           @id @default(uuid())
+  organizationId  String
+  code            String           // Kode supplier: SUPP-001
+  name            String           // Nama supplier
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  npwp            String?          // NPWP untuk faktur pajak
+  bankAccount     String?          // Nomor rekening untuk pembayaran
+  bankName        String?          // Nama bank
+  paymentTerm     Int              @default(30) // Term pembayaran (hari)
+  status          String           @default("ACTIVE") // ACTIVE, INACTIVE
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendorBills     VendorBill[]
+  purchaseOrders  PurchaseOrder[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+}
+
+// 15. AR/AP - Invoice (Account Receivable)
+model Invoice {
+  id              String           @id @default(uuid())
+  organizationId  String
+  customerId      String
+  invoiceNumber   String           // Nomor invoice: INV-2024-001
+  invoiceDate     DateTime
+  dueDate         DateTime
+  subtotal        Float            @default(0)
+  taxAmount       Float            @default(0) // PPN
+  discountAmount  Float            @default(0)
+  totalAmount     Float            @default(0)
+  paidAmount      Float            @default(0)
+  remainingAmount Float            @default(0)
+  status          String           @default("DRAFT") // DRAFT, SENT, PARTIALLY_PAID, PAID, OVERDUE, CANCELLED
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items           InvoiceItem[]
+  payments        InvoicePayment[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, customerId])
+  @@index([organizationId, status])
+  @@index([organizationId, invoiceDate])
+}
+
+// 16. AR/AP - Invoice Item
+model InvoiceItem {
+  id              String           @id @default(uuid())
+  invoiceId       String
+  description     String
+  quantity        Float            @default(1)
+  unitPrice       Float
+  discount        Float            @default(0)
+  taxRate         Float            @default(0) // PPN rate: 11%
+  subtotal        Float
+  taxAmount       Float
+  total           Float
+
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// 17. AR/AP - Vendor Bill (Account Payable)
+model VendorBill {
+  id              String           @id @default(uuid())
+  organizationId  String
+  supplierId      String
+  billNumber      String           // Nomor bill: BILL-2024-001
+  billDate        DateTime
+  dueDate         DateTime
+  subtotal        Float            @default(0)
+  taxAmount       Float            @default(0) // PPN
+  discountAmount  Float            @default(0)
+  totalAmount     Float            @default(0)
+  paidAmount      Float            @default(0)
+  remainingAmount Float            @default(0)
+  status          String           @default("DRAFT") // DRAFT, RECEIVED, PARTIALLY_PAID, PAID, OVERDUE, CANCELLED
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier        Supplier         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  items           VendorBillItem[]
+  payments        VendorBillPayment[]
+
+  @@unique([organizationId, billNumber])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, status])
+  @@index([organizationId, billDate])
+}
+
+// 18. AR/AP - Vendor Bill Item
+model VendorBillItem {
+  id              String           @id @default(uuid())
+  vendorBillId    String
+  description     String
+  quantity        Float            @default(1)
+  unitPrice       Float
+  discount        Float            @default(0)
+  taxRate         Float            @default(0) // PPN rate: 11%
+  subtotal        Float
+  taxAmount       Float
+  total           Float
+
+  vendorBill      VendorBill       @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
+}
+
+// 19. AR/AP - Invoice Payment
+model InvoicePayment {
+  id              String           @id @default(uuid())
+  organizationId  String
+  invoiceId       String
+  paymentDate     DateTime
+  amount          Float
+  paymentMethod   String           // TRANSFER, CASH, CHECK
+  bankAccountId   String?
+  referenceNumber String?
+  notes           String?
+  createdAt       DateTime         @default(now())
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, invoiceId])
+  @@index([organizationId, paymentDate])
+}
+
+// 20. AR/AP - Vendor Bill Payment
+model VendorBillPayment {
+  id              String           @id @default(uuid())
+  organizationId  String
+  vendorBillId    String
+  paymentDate     DateTime
+  amount          Float
+  paymentMethod   String           // TRANSFER, CASH, CHECK
+  bankAccountId   String?
+  referenceNumber String?
+  notes           String?
+  createdAt       DateTime         @default(now())
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendorBill      VendorBill       @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, vendorBillId])
+  @@index([organizationId, paymentDate])
+}
+
+// Purchase Order Model
+model PurchaseOrder {
+  id              String    @id @default(uuid())
+  organizationId  String
+  supplierId      String
+  poNumber        String    @unique
+  orderDate       DateTime
+  expectedDate    DateTime?
+  status          String    @default("DRAFT") // DRAFT, SENT, RECEIVED, CANCELLED
+  subtotal        Decimal   @db.Decimal(20, 2)
+  taxAmount       Decimal   @db.Decimal(20, 2) @default(0)
+  discountAmount  Decimal   @db.Decimal(20, 2) @default(0)
+  totalAmount     Decimal   @db.Decimal(20, 2)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+  items           PurchaseOrderItem[]
+
+  @@index([organizationId])
+  @@index([supplierId])
+  @@index([poNumber])
+}
+
+model PurchaseOrderItem {
+  id              String    @id @default(uuid())
+  purchaseOrderId String
+  description     String
+  quantity        Decimal   @db.Decimal(10, 2)
+  unitPrice       Decimal   @db.Decimal(20, 2)
+  discount        Decimal   @db.Decimal(20, 2) @default(0)
+  taxRate         Decimal   @db.Decimal(5, 2) @default(0)
+  subtotal        Decimal   @db.Decimal(20, 2)
+  taxAmount       Decimal   @db.Decimal(20, 2)
+  total           Decimal   @db.Decimal(20, 2)
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+}

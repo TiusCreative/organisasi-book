@@ -1,0 +1,22 @@
+{
+  "name": "Organisasi Book",
+  "short_name": "OrganisasiBook",
+  "description": "Sistem Akuntansi & Keuangan untuk Organisasi, Yayasan, dan Perusahaan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}
