@@ -18,7 +18,7 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_#dbeafe,_#f8fafc_50%,_#e2e8f0)] px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_#dbeafe,_#f8fafc_50%,_#e2e8f0)] px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
         <div className="text-center mb-6">
           <img src="/logo.png" alt="Organisasi Book" className="mx-auto h-16 w-16 rounded-2xl shadow-sm" />
@@ -26,6 +26,11 @@ export default async function LoginPage() {
           <p className="text-sm text-slate-500 mt-2">Masuk memakai akun yang dibuat oleh admin.</p>
         </div>
         <LoginForm />
+      </div>
+      <div className="mt-6 text-center text-xs text-slate-500">
+        <a href="/terms" className="text-blue-600 hover:underline">
+          Terms & Conditions
+        </a>
       </div>
     </div>
   )

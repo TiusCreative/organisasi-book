@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from 'react'
-import { Menu, X, LayoutDashboard, ReceiptText, FileBarChart, Settings, Building2, ChevronDown, Landmark, Users, Package, LineChart, BadgePercent, Shield, FileText, Clock } from 'lucide-react'
+import { Menu, X, LayoutDashboard, ReceiptText, FileBarChart, Settings, Building2, ChevronDown, Landmark, Users, Package, LineChart, BadgePercent, Shield, FileText, Clock, Wrench, Boxes, Target, UserCheck, Truck, DollarSign } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { logoutUser } from '../app/actions/auth'
@@ -29,11 +29,20 @@ export default function DashboardLayout({
   }
 
   const appMenuItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, href: '/', permission: 'dashboard' },
+    { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', permission: 'dashboard' },
     { name: 'Transaksi', icon: ReceiptText, href: '/transaksi', permission: 'transactions' },
     { name: 'AR/AP', icon: FileText, href: '/arap', permission: 'arap' },
     { name: 'Purchase Order', icon: FileText, href: '/po', permission: 'arap' },
     { name: 'Rekening Bank', icon: Landmark, href: '/bank', permission: 'bank' },
+    { name: 'Customer', icon: UserCheck, href: '/customer', permission: 'customer' },
+    { name: 'Supplier', icon: Truck, href: '/supplier', permission: 'supplier' },
+    { name: 'Warehouse', icon: Building2, href: '/warehouse', permission: 'warehouse' },
+    { name: 'Branch', icon: Building2, href: '/branch', permission: 'branch' },
+    { name: 'Sales Team', icon: Users, href: '/sales-team', permission: 'sales' },
+    { name: 'Work Order', icon: Wrench, href: '/work-order', permission: 'workOrder' },
+    { name: 'Sales / Marketing', icon: Target, href: '/sales', permission: 'sales' },
+    { name: 'Inventory', icon: Boxes, href: '/inventory', permission: 'inventory' },
+    { name: 'Budget', icon: DollarSign, href: '/budget', permission: 'reports' },
     { name: 'Investasi', icon: LineChart, href: '/investasi', permission: 'investments' },
     { name: 'Laporan', icon: FileBarChart, href: '/laporan', permission: 'reports' },
     { name: 'Daftar Akun', icon: Settings, href: '/akun', permission: 'accounts' },

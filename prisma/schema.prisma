@@ -49,6 +49,16 @@ model User {
 
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   auditLogs      AuditLog[]       @relation("UserAuditLog")
+  pettyCashCustody PettyCash[] @relation("PettyCashCustodian")
+  workOrdersAssigned WorkOrder[] @relation("WorkOrderAssignee")
+  warehousesManaged Warehouse[] @relation("WarehouseManager")
+  salesOrdersAssigned SalesOrder[] @relation("SalesPerson")
+  commissionsReceived SalesCommission[] @relation("CommissionSalesPerson")
+  branchesManaged Branch[] @relation("BranchManager")
+  stockOpnamesPerformed StockOpname[] @relation("StockOpnamePerformer")
+  stockOpnamesApproved StockOpname[] @relation("StockOpnameApprover")
+  budgetsApproved Budget[] @relation("BudgetApprover")
+  division Division? @relation("DivisionManager")
 }
 
 // 1. Tabel Organisasi (Multitenant)
@@ -97,6 +107,22 @@ model Organization {
   invoicePayments InvoicePayment[]
   vendorBillPayments VendorBillPayment[]
   purchaseOrders PurchaseOrder[]
+  bankReconciliations BankReconciliation[] @relation("BankReconciliations")
+  workOrders WorkOrder[]
+  warehouses Warehouse[]
+  inventoryItems InventoryItem[]
+  inventoryMovements InventoryMovement[]
+  stockOpnames StockOpname[]
+  salesOrders SalesOrder[]
+  deliveryOrders DeliveryOrder[]
+  salesCommissions SalesCommission[]
+  recurringTransactions RecurringTransaction[] @relation("RecurringTransactions")
+  currencies Currency[]
+  exchangeRates ExchangeRate[]
+  pettyCashAccounts PettyCash[]
+  branches Branch[]
+  budgets Budget[]
+  divisions Division[]
 }
 
 // 2. Tabel Kategori Akun
@@ -125,6 +151,7 @@ model ChartOfAccount {
   bankAccount    BankAccount?     // Relasi 1-to-1: 1 Akun bisa jadi 1 Rekening Bank
   investment     Investment?      // Relasi 1-to-1: 1 Akun bisa jadi 1 investasi
   journalItems   TransactionLine[]
+  budgetItemsAsAccount BudgetItem[] @relation("BudgetItemAccount")
 }
 
 // 4. Tabel Rekening Bank (Buku Pembantu Bank)
@@ -136,18 +163,18 @@ model BankAccount {
   accountNumber  String           // Nomor Rekening
   accountName    String           // Atas Nama
   balance        Float            @default(0) // Saldo Rekening
-  lastReconciled DateTime?        // Tanggal last reconciliation
-  notes          String?          // Catatan reconciliation
+  currencyId     String?
   status         String           @default("ACTIVE") // ACTIVE, INACTIVE
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
   organization   Organization     @relation(fields: [organizationId], references: [id])
   account        ChartOfAccount   @relation(fields: [accountId], references: [id])
+  currency       Currency? @relation(fields: [currencyId], references: [id])
   sourceInvestments Investment[]  @relation("InvestmentSourceBank")
   settlementInvestments Investment[] @relation("InvestmentSettlementBank")
+  reconciliations BankReconciliation[] @relation("BankReconciliations")
 }
-
 model Investment {
   id                     String         @id @default(uuid())
   organizationId         String
@@ -187,11 +214,14 @@ model Transaction {
   description    String           // Keterangan transaksi (misal: "Bayar Listrik Bulan April")
   reference      String?          // Nomor Nota / Invoice (bisa untuk PDF/WA)
   createdAt      DateTime         @default(now())
+  recurringTransactionId String?  // Referensi ke recurring transaction yang generate transaksi ini
 
   organization   Organization     @relation(fields: [organizationId], references: [id])
   lines          TransactionLine[]
   taxEntries     TaxEntry[]
   investmentInkaso Investment?    @relation("InvestmentInkasoTransaction")
+  attachments    TransactionAttachment[]
+  recurringTransaction RecurringTransaction? @relation("RecurringSource", fields: [recurringTransactionId], references: [id])
 }
 
 // 5. Tabel Detail Transaksi (Debit & Kredit)
@@ -431,10 +461,15 @@ model Customer {
   organizationId  String
   code            String           // Kode customer: CUST-001
   name            String           // Nama customer
+  contactPerson   String?          // Nama kontak person
   email           String?
   phone           String?
+  mobile          String?          // Nomor HP
   address         String?
   city            String?
+  province        String?
+  postalCode      String?
+  country         String?          @default("Indonesia")
   npwp            String?          // NPWP untuk faktur pajak
   creditLimit     Float            @default(0) // Limit kredit
   paymentTerm     Int              @default(30) // Term pembayaran (hari)
@@ -445,6 +480,9 @@ model Customer {
 
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invoices        Invoice[]
+  workOrders      WorkOrder[]
+  salesOrders     SalesOrder[]
+  deliveryOrders  DeliveryOrder[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -456,10 +494,15 @@ model Supplier {
   organizationId  String
   code            String           // Kode supplier: SUPP-001
   name            String           // Nama supplier
+  contactPerson   String?          // Nama kontak person
   email           String?
   phone           String?
+  mobile          String?          // Nomor HP
   address         String?
   city            String?
+  province        String?
+  postalCode      String?
+  country         String?          @default("Indonesia")
   npwp            String?          // NPWP untuk faktur pajak
   bankAccount     String?          // Nomor rekening untuk pembayaran
   bankName        String?          // Nama bank
@@ -650,4 +693,675 @@ model PurchaseOrderItem {
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
   @@index([purchaseOrderId])
+}
+
+// Bank Reconciliation Model
+model BankReconciliation {
+  id              String    @id @default(uuid())
+  organizationId  String
+  bankAccountId   String
+  reconciliationDate DateTime
+  statementBalance Float    // Saldo dari rekening koran/bank statement
+  bookBalance     Float     // Saldo buku dari sistem
+  difference      Float     // Selisih (statementBalance - bookBalance)
+  status          String    @default("PENDING") // PENDING, RECONCILED
+  notes           String?
+  reconciledBy    String?   // User ID yang melakukan rekonsiliasi
+  reconciledAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation("BankReconciliations", fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccount     BankAccount @relation("BankReconciliations", fields: [bankAccountId], references: [id])
+  items           BankReconciliationItem[]
+
+  @@index([organizationId])
+  @@index([bankAccountId])
+  @@index([reconciliationDate])
+}
+
+model BankReconciliationItem {
+  id              String    @id @default(uuid())
+  reconciliationId String
+  transactionId   String?   // Transaction yang di-reconcile
+  type            String    // DEPOSIT, WITHDRAWAL, ADJUSTMENT
+  amount          Float
+  description     String
+  isChecked       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  reconciliation  BankReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+
+  @@index([reconciliationId])
+}
+
+// Recurring Transaction Model
+model RecurringTransaction {
+  id              String    @id @default(uuid())
+  organizationId  String
+  name            String    // Nama recurring transaction (misal: "Sewa Kantor Bulanan")
+  description     String?
+  frequency       String    // DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY
+  interval        Int       @default(1) // Interval (misal: setiap 2 minggu = 2)
+  startDate       DateTime
+  endDate         DateTime? // Null untuk ongoing
+  nextRunDate     DateTime
+  isActive        Boolean   @default(true)
+  totalAmount     Float     // Total amount untuk recurring
+  notes           String?
+
+  // Template untuk transaction lines
+  lines           RecurringTransactionLine[]
+  organization    Organization @relation("RecurringTransactions", fields: [organizationId], references: [id], onDelete: Cascade)
+  generatedTransactions Transaction[] @relation("RecurringSource")
+
+  @@index([organizationId])
+  @@index([nextRunDate])
+  @@index([isActive])
+}
+
+model RecurringTransactionLine {
+  id                      String @id @default(uuid())
+  recurringTransactionId  String
+  accountId               String
+  debit                   Float  @default(0)
+  credit                  Float  @default(0)
+  description             String?
+
+  recurringTransaction    RecurringTransaction @relation(fields: [recurringTransactionId], references: [id], onDelete: Cascade)
+
+  @@index([recurringTransactionId])
+}
+
+// Transaction Attachment Model
+model TransactionAttachment {
+  id              String    @id @default(uuid())
+  transactionId   String
+  fileName        String
+  fileUrl         String    // URL file (bisa dari S3, Cloudinary, dll)
+  fileSize        Int?      // Ukuran file dalam bytes
+  fileType        String?   // MIME type (image/jpeg, application/pdf, dll)
+  uploadedBy      String?   // User ID yang upload
+  createdAt       DateTime  @default(now())
+
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+}
+
+// Currency Model for Multi-Currency
+model Currency {
+  id              String    @id @default(uuid())
+  organizationId  String
+  code            String    // USD, EUR, JPY, dll
+  name            String    // US Dollar, Euro, Japanese Yen
+  symbol          String    // $, €, ¥
+  isBase          Boolean   @default(false) // Mata uang dasar organisasi
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromExchangeRates ExchangeRate[] @relation("ExchangeRateFrom")
+  toExchangeRates ExchangeRate[] @relation("ExchangeRateTo")
+  bankAccounts    BankAccount[]
+  pettyCashAccounts PettyCash[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+// Exchange Rate Model
+model ExchangeRate {
+  id              String    @id @default(uuid())
+  organizationId  String
+  fromCurrencyId  String
+  toCurrencyId    String
+  rate            Float     // Exchange rate (1 fromCurrency = X toCurrency)
+  effectiveDate   DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromCurrency    Currency @relation("ExchangeRateFrom", fields: [fromCurrencyId], references: [id])
+  toCurrency      Currency @relation("ExchangeRateTo", fields: [toCurrencyId], references: [id])
+
+  @@unique([organizationId, fromCurrencyId, toCurrencyId, effectiveDate])
+  @@index([organizationId])
+  @@index([effectiveDate])
+}
+
+// Petty Cash Model
+model PettyCash {
+  id              String    @id @default(uuid())
+  organizationId  String
+  name            String    // Nama kas kecil (misal: "Kas Kecil Marketing")
+  code            String    // Kode kas kecil (misal: "KK-MKT")
+  currencyId      String
+  fundType        String    // IMPREST atau FLUKTUASI
+  initialAmount   Float     @default(0)
+  currentAmount   Float     @default(0)
+  custodianId     String?   // User ID yang bertanggung jawab
+  location        String?   // Lokasi kas kecil
+  status          String    @default("ACTIVE") // ACTIVE, INACTIVE
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  currency        Currency @relation(fields: [currencyId], references: [id])
+  custodian       User? @relation("PettyCashCustodian", fields: [custodianId], references: [id])
+  transactions    PettyCashTransaction[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([custodianId])
+}
+
+// Petty Cash Transaction Model
+model PettyCashTransaction {
+  id              String    @id @default(uuid())
+  pettyCashId     String
+  transactionType String    // REPLENISH, DISBURSEMENT, ADJUSTMENT
+  amount          Float
+  description     String
+  reference       String?   // Nomor referensi
+  accountId       String?   // COA untuk pencatatan di sistem utama
+  approvedBy      String?   // User ID yang approve
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  pettyCash       PettyCash @relation(fields: [pettyCashId], references: [id], onDelete: Cascade)
+
+  @@index([pettyCashId])
+  @@index([transactionType])
+  @@index([createdAt])
+}
+
+// Work Order Model
+model WorkOrder {
+  id              String    @id @default(uuid())
+  organizationId  String
+  code            String    // Kode WO (misal: WO-2024-001)
+  barcode         String?   // Barcode untuk scan
+  title           String    // Judul/Deskripsi singkat
+  description     String?   // Deskripsi lengkap
+  customerId      String?   // Customer terkait
+  status          String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  priority        String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  assignedTo      String?   // User ID yang ditugaskan
+  startDate       DateTime?
+  dueDate         DateTime?
+  completedAt     DateTime?
+  estimatedHours  Float?
+  actualHours     Float?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedUser    User? @relation("WorkOrderAssignee", fields: [assignedTo], references: [id])
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  items           WorkOrderItem[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([status])
+  @@index([assignedTo])
+  @@index([barcode])
+}
+
+// Work Order Item Model
+model WorkOrderItem {
+  id              String    @id @default(uuid())
+  workOrderId     String
+  itemId          String?   // Item dari inventory
+  description     String
+  quantity        Float
+  unit            String?   // Satuan (pcs, kg, dll)
+  unitPrice       Float     @default(0)
+  totalPrice      Float     @default(0)
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+}
+
+// Warehouse Model (Multi-Warehouse)
+model Warehouse {
+  id              String    @id @default(uuid())
+  organizationId  String
+  code            String    // Kode gudang (misal: WH-01)
+  name            String    // Nama gudang
+  location        String?   // Alamat lokasi
+  type            String    @default("MAIN") // MAIN, BRANCH, TRANSIT
+  managerId       String?   // User ID manager gudang
+  status          String    @default("ACTIVE") // ACTIVE, INACTIVE
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manager         User? @relation("WarehouseManager", fields: [managerId], references: [id])
+  inventoryItems  InventoryItem[]
+  stockOpnames    StockOpname[]
+  branch          Branch? @relation("BranchWarehouse")
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([status])
+}
+
+// Inventory Item Model
+model InventoryItem {
+  id              String    @id @default(uuid())
+  organizationId  String
+  warehouseId     String
+  code            String    // Kode barang (SKU)
+  barcode         String?   // Barcode untuk scan
+  name            String    // Nama barang
+  description     String?
+  category        String?   // Kategori barang
+  itemType        String?   @default("GENERAL") // GENERAL, COIL, RAW_MATERIAL, FINISHED_GOOD, SEMI_FINISHED
+  unit            String    // Satuan dasar (pcs, kg, dll)
+  secondaryUnit   String?   // Satuan sekunder (dus, koli, dll)
+  conversionRate  Float?    @default(1) // Konversi ke satuan sekunder (1 dus = X pcs)
+  shelf           String?   // Rak/shelf lokasi barang
+  row             String?   // Baris rak
+  level           String?   // Tingkat rak
+  bin             String?   // Bin/kompartemen
+  valuationMethod String    @default("AVERAGE") // FIFO, LIFO, AVERAGE
+  quantity        Float     @default(0) // Jumlah fisik saat ini
+  minStock        Float     @default(0) // Minimum stock
+  maxStock        Float?    // Maximum stock
+  reorderPoint    Float?    @default(0) // Titik reorder
+  safetyStock     Float?    @default(0) // Safety stock
+  unitCost        Float     @default(0) // Harga per unit (untuk penilaian stok)
+  totalValue      Float     @default(0) // Total nilai stok (quantity * unitCost)
+  status          String    @default("ACTIVE") // ACTIVE, INACTIVE
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  movements       InventoryMovement[]
+  stockOpnames    StockOpnameItem[]
+  salesOrderItems SalesOrderItem[]
+  deliveryOrderItems DeliveryOrderItem[]
+
+  @@unique([organizationId, warehouseId, code])
+  @@index([organizationId])
+  @@index([warehouseId])
+  @@index([barcode])
+  @@index([category])
+  @@index([itemType])
+  @@index([shelf, row, level])
+}
+
+// Inventory Movement Model (Mutasi Stok)
+model InventoryMovement {
+  id              String    @id @default(uuid())
+  organizationId  String
+  itemId          String
+  movementType    String    // IN, OUT, ADJUSTMENT, TRANSFER
+  quantity        Float
+  unitCost        Float?    // Harga per unit saat movement
+  totalCost       Float?    // Total cost (quantity * unitCost)
+  reference       String?   // Referensi transaksi (WO#, PO#, dll)
+  description     String?
+  fromWarehouseId String?   // Untuk transfer
+  toWarehouseId   String?   // Untuk transfer
+  performedBy     String?   // User ID yang melakukan
+  createdAt       DateTime  @default(now())
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([itemId])
+  @@index([movementType])
+  @@index([createdAt])
+}
+
+// Stock Opname Model
+model StockOpname {
+  id              String    @id @default(uuid())
+  organizationId  String
+  warehouseId     String
+  code            String    // Kode stock opname (misal: SO-2024-001)
+  opnameDate      DateTime  @default(now())
+  status          String    @default("DRAFT") // DRAFT, IN_PROGRESS, PENDING_APPROVAL, APPROVED, REJECTED, COMPLETED, CANCELLED
+  performedBy     String?   // User ID yang melakukan check fisik
+  approvedBy      String?   // User ID yang approve
+  approvedAt      DateTime? // Waktu approval
+  syncedAt        DateTime? // Waktu sync ke sistem
+  isSynced        Boolean   @default(false) // Status sync
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id])
+  performer       User? @relation("StockOpnamePerformer", fields: [performedBy], references: [id])
+  approver        User? @relation("StockOpnameApprover", fields: [approvedBy], references: [id])
+  items           StockOpnameItem[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([warehouseId])
+  @@index([opnameDate])
+  @@index([status])
+  @@index([performedBy])
+  @@index([approvedBy])
+}
+
+// Stock Opname Item Model
+model StockOpnameItem {
+  id              String    @id @default(uuid())
+  stockOpnameId   String
+  itemId          String
+  systemQuantity  Float     // Jumlah di sistem
+  physicalQuantity Float     // Jumlah fisik
+  difference      Float     // Selisih (physical - system)
+  unitCost        Float?    // Harga per unit
+  totalDifference Float?    // Total nilai selisih
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  stockOpname     StockOpname @relation(fields: [stockOpnameId], references: [id], onDelete: Cascade)
+  item            InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@index([stockOpnameId])
+  @@index([itemId])
+}
+
+// ============================================
+// SALES & MARKETING MODULE
+// ============================================
+
+// Sales Order Model
+model SalesOrder {
+  id              String           @id @default(uuid())
+  organizationId  String
+  code            String           // SO-2024-0001
+  customerId      String
+  salesPersonId   String?          // User ID sales person
+  orderDate       DateTime         @default(now())
+  deliveryDate    DateTime?
+  status          String           @default("DRAFT") // DRAFT, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  priority        String           @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  subtotal        Float            @default(0)
+  discountAmount  Float            @default(0)
+  taxAmount       Float            @default(0)
+  totalAmount     Float            @default(0)
+  notes           String?
+  terms           String?          // Terms & conditions
+  internalNotes   String?          // Catatan internal
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  salesPerson     User?            @relation("SalesPerson", fields: [salesPersonId], references: [id])
+  items           SalesOrderItem[]
+  deliveryOrders  DeliveryOrder[]
+  commission      SalesCommission?
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([customerId])
+  @@index([salesPersonId])
+  @@index([orderDate])
+}
+
+// Sales Order Item
+model SalesOrderItem {
+  id              String           @id @default(uuid())
+  salesOrderId    String
+  itemId          String           // InventoryItem ID
+  quantity        Float            @default(0)
+  unitPrice       Float            @default(0)
+  discountPercent Float            @default(0)
+  discountAmount  Float            @default(0)
+  taxPercent      Float            @default(0)
+  taxAmount       Float            @default(0)
+  totalPrice      Float            @default(0)
+  notes           String?
+  deliveredQty    Float            @default(0) // Qty yang sudah di-DO
+  createdAt       DateTime         @default(now())
+
+  salesOrder      SalesOrder       @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  item            InventoryItem    @relation(fields: [itemId], references: [id])
+  deliveryItems   DeliveryOrderItem[]
+
+  @@index([salesOrderId])
+  @@index([itemId])
+}
+
+// Delivery Order Model
+model DeliveryOrder {
+  id              String           @id @default(uuid())
+  organizationId  String
+  code            String           // DO-2024-0001
+  salesOrderId    String           // Referensi ke SalesOrder
+  customerId      String
+  deliveryDate    DateTime         @default(now())
+  status          String           @default("DRAFT") // DRAFT, READY, SHIPPED, DELIVERED, RETURNED, CANCELLED
+  driverName      String?
+  driverPhone     String?
+  vehiclePlate    String?          // Nomor plat kendaraan
+  deliveryAddress String?
+  notes           String?
+  trackingNumber  String?          // Nomor resi pengiriman
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  receivedBy      String?          // Nama penerima
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder      SalesOrder       @relation(fields: [salesOrderId], references: [id])
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  items           DeliveryOrderItem[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([salesOrderId])
+  @@index([customerId])
+}
+
+// Delivery Order Item
+model DeliveryOrderItem {
+  id              String           @id @default(uuid())
+  deliveryOrderId String
+  salesOrderItemId String
+  itemId          String
+  quantity        Float            @default(0)
+  notes           String?
+  createdAt       DateTime         @default(now())
+
+  deliveryOrder   DeliveryOrder    @relation(fields: [deliveryOrderId], references: [id], onDelete: Cascade)
+  salesOrderItem  SalesOrderItem   @relation(fields: [salesOrderItemId], references: [id])
+  item            InventoryItem    @relation(fields: [itemId], references: [id])
+
+  @@index([deliveryOrderId])
+  @@index([salesOrderItemId])
+  @@index([itemId])
+}
+
+// Sales Commission Model
+model SalesCommission {
+  id              String           @id @default(uuid())
+  organizationId  String
+  salesOrderId    String           @unique // 1 commission per sales order
+  salesPersonId   String
+  baseAmount      Float            @default(0) // Total penjualan
+  commissionRate   Float            @default(0) // Persentase komisi (e.g., 5% = 0.05)
+  commissionAmount Float           @default(0) // Nilai komisi
+  bonusAmount     Float            @default(0) // Bonus tambahan
+  totalCommission Float            @default(0) // Total komisi + bonus
+  status          String           @default("PENDING") // PENDING, APPROVED, PAID, CANCELLED
+  approvedBy      String?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  paymentRef      String?          // Referensi pembayaran
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder      SalesOrder       @relation(fields: [salesOrderId], references: [id])
+  salesPerson     User             @relation("CommissionSalesPerson", fields: [salesPersonId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([salesPersonId])
+  @@index([createdAt])
+}
+
+// Branch/Cabang Model
+model Branch {
+  id              String    @id @default(uuid())
+  organizationId  String
+  code            String    // Kode cabang (misal: CAB-001)
+  name            String    // Nama cabang
+  address         String?   // Alamat lengkap
+  city            String?   // Kota
+  province        String?   // Provinsi
+  postalCode      String?   // Kode pos
+  country         String?   @default("Indonesia")
+  phone           String?   // Nomor telepon
+  email           String?   // Email
+  managerId       String?   // User ID manager cabang
+  warehouseId     String?   @unique // Warehouse ID yang terhubung ke cabang
+  status          String    @default("ACTIVE") // ACTIVE, INACTIVE
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manager         User? @relation("BranchManager", fields: [managerId], references: [id])
+  warehouse       Warehouse? @relation("BranchWarehouse", fields: [warehouseId], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([status])
+  @@index([managerId])
+}
+
+// Budget Model (Anggaran)
+model Budget {
+  id              String    @id @default(uuid())
+  organizationId  String
+  year            Int       // Tahun anggaran
+  divisionId      String?   // Divisi/Departemen
+  code            String    // Kode budget (misal: BUD-2024-001)
+  name            String    // Nama budget
+  periodType      String    @default("ANNUAL") // ANNUAL, QUARTERLY, MONTHLY
+  status          String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, ACTIVE, CLOSED
+  totalBudget     Float     @default(0) // Total budget
+  totalActual     Float     @default(0) // Total actual
+  variance        Float     @default(0) // Selisih (actual - budget)
+  variancePercent Float     @default(0) // Persentase selisih
+  approvedBy      String?   // User ID yang approve
+  approvedAt      DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  division        Division? @relation(fields: [divisionId], references: [id])
+  approver        User? @relation("BudgetApprover", fields: [approvedBy], references: [id])
+  items           BudgetItem[]
+  actuals         BudgetActual[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, year, divisionId])
+  @@index([organizationId])
+  @@index([year])
+  @@index([divisionId])
+  @@index([status])
+}
+
+// Budget Item Model (Detail Anggaran)
+model BudgetItem {
+  id              String    @id @default(uuid())
+  budgetId        String
+  accountId       String?   // Akun COA
+  category        String?   // Kategori pengeluaran/pemasukan
+  itemName        String    // Nama item budget
+  budgetAmount    Float     @default(0) // Jumlah budget
+  actualAmount    Float     @default(0) // Jumlah actual
+  variance        Float     @default(0) // Selisih
+  variancePercent Float     @default(0) // Persentase selisih
+  q1Budget        Float     @default(0) // Budget Q1
+  q1Actual        Float     @default(0) // Actual Q1
+  q2Budget        Float     @default(0) // Budget Q2
+  q2Actual        Float     @default(0) // Actual Q2
+  q3Budget        Float     @default(0) // Budget Q3
+  q3Actual        Float     @default(0) // Actual Q3
+  q4Budget        Float     @default(0) // Budget Q4
+  q4Actual        Float     @default(0) // Actual Q4
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  budget          Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  account         ChartOfAccount? @relation("BudgetItemAccount", fields: [accountId], references: [id])
+  actuals         BudgetActual[]
+
+  @@index([budgetId])
+  @@index([accountId])
+  @@index([category])
+}
+
+// Budget Actual Model (Actual vs Budget Tracking)
+model BudgetActual {
+  id              String    @id @default(uuid())
+  budgetId        String
+  budgetItemId    String?
+  transactionId   String?   // Referensi ke transaksi
+  period          String    // Period (Q1, Q2, Q3, Q4, atau bulan)
+  actualAmount    Float     @default(0) // Jumlah actual
+  budgetAmount    Float     @default(0) // Jumlah budget untuk period ini
+  variance        Float     @default(0) // Selisih
+  variancePercent Float     @default(0) // Persentase selisih
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  budget          Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budgetItem      BudgetItem? @relation(fields: [budgetItemId], references: [id])
+
+  @@index([budgetId])
+  @@index([budgetItemId])
+  @@index([period])
+  @@index([transactionId])
+}
+
+// Division/Departemen Model (Multi-Division Management)
+model Division {
+  id              String    @id @default(uuid())
+  organizationId  String
+  code            String    // Kode divisi (misal: DIV-001)
+  name            String    // Nama divisi
+  parentId        String?   // Parent division untuk hierarchy
+  managerId       String?   @unique // User ID manager divisi
+  description     String?
+  status          String    @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent          Division? @relation("DivisionHierarchy", fields: [parentId], references: [id])
+  children        Division[] @relation("DivisionHierarchy")
+  manager         User? @relation("DivisionManager", fields: [managerId], references: [id])
+  budgets         Budget[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([parentId])
+  @@index([managerId])
+  @@index([status])
 }

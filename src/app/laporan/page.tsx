@@ -145,6 +145,38 @@ export default async function LaporanPage({ searchParams }: ReportPageProps) {
           <h3 className="text-lg font-bold text-rose-900">Laporan Pajak</h3>
           <p className="text-sm text-rose-700 mt-2">PPh 21, PPh 23, dan PPN per periode dengan catatan otomatis.</p>
         </Link>
+
+        <Link
+          href={`/laporan/arap?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`}
+          className="p-6 rounded-xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 transition-colors cursor-pointer"
+        >
+          <h3 className="text-lg font-bold text-teal-900">Laporan AR/AP</h3>
+          <p className="text-sm text-teal-700 mt-2">Laporan Account Receivable dan Account Payable (Invoice & Vendor Bill)</p>
+        </Link>
+
+        <Link
+          href={`/laporan/po?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`}
+          className="p-6 rounded-xl border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer"
+        >
+          <h3 className="text-lg font-bold text-indigo-900">Laporan Purchase Order</h3>
+          <p className="text-sm text-indigo-700 mt-2">Laporan Purchase Order dengan status dan supplier</p>
+        </Link>
+
+        <Link
+          href="/sales"
+          className="p-6 rounded-xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors cursor-pointer"
+        >
+          <h3 className="text-lg font-bold text-emerald-900">Laporan Sales / Marketing</h3>
+          <p className="text-sm text-emerald-700 mt-2">Sales Order, Delivery Order, Invoice, komisi + cetak/WA/PDF.</p>
+        </Link>
+
+        <Link
+          href="/inventory"
+          className="p-6 rounded-xl border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 transition-colors cursor-pointer"
+        >
+          <h3 className="text-lg font-bold text-sky-900">Laporan Gudang & Stock Opname</h3>
+          <p className="text-sm text-sky-700 mt-2">Multi-warehouse, barcode, mutasi stok, stock opname + cetak/WA/PDF.</p>
+        </Link>
       </div>
 
       <ReportViewer

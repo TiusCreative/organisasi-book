@@ -71,7 +71,7 @@ export async function loginUser(formData: FormData) {
   const redirectTo =
     organization && organization.status === "ACTIVE" && isSubscriptionExpired(organization.subscriptionEndsAt)
       ? "/berlangganan"
-      : "/"
+      : "/dashboard"
 
   return { success: true, redirectTo }
 }
@@ -127,7 +127,7 @@ export async function registerOrganizationOwner(formData: FormData) {
   await setSessionCookie(token)
 
   revalidatePath("/")
-  return { success: true, redirectTo: "/" }
+  return { success: true, redirectTo: "/dashboard" }
 }
 
 export async function createAdminManagedUser(formData: FormData) {

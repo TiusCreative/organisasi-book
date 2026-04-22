@@ -11,7 +11,7 @@ import { logAudit } from "../../lib/audit-logger"
 export async function createCustomer(formData: FormData) {
   const { user, organization } = await requireCurrentOrganization()
 
-  if (!hasModulePermission(user, "accounts")) {
+  if (!hasModulePermission(user, "customer")) {
     throw new Error("Anda tidak memiliki izin untuk membuat customer.")
   }
 
@@ -68,7 +68,7 @@ export async function createCustomer(formData: FormData) {
 export async function updateCustomer(formData: FormData) {
   const { user } = await requireCurrentOrganization()
 
-  if (!hasModulePermission(user, "accounts")) {
+  if (!hasModulePermission(user, "customer")) {
     throw new Error("Anda tidak memiliki izin untuk mengubah customer.")
   }
 
@@ -159,7 +159,7 @@ export async function deleteCustomer(id: string) {
 export async function createSupplier(formData: FormData) {
   const { user, organization } = await requireCurrentOrganization()
 
-  if (!hasModulePermission(user, "accounts")) {
+  if (!hasModulePermission(user, "supplier")) {
     throw new Error("Anda tidak memiliki izin untuk membuat supplier.")
   }
 
@@ -218,7 +218,7 @@ export async function createSupplier(formData: FormData) {
 export async function updateSupplier(formData: FormData) {
   const { user } = await requireCurrentOrganization()
 
-  if (!hasModulePermission(user, "accounts")) {
+  if (!hasModulePermission(user, "supplier")) {
     throw new Error("Anda tidak memiliki izin untuk mengubah supplier.")
   }
 

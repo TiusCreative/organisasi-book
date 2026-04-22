@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Plus, DollarSign } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Plus, DollarSign, Share2, Download, Printer } from "lucide-react"
 import { getInvoices, createInvoice, updateInvoice, addInvoicePayment } from "../../app/actions/invoice"
 import { getCustomers } from "../../app/actions/arap"
 
@@ -12,6 +12,7 @@ export default function InvoiceManager({ organizationId }: { organizationId: str
   const [showModal, setShowModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
+  const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadData()
@@ -70,6 +71,33 @@ export default function InvoiceManager({ organizationId }: { organizationId: str
     loadData()
   }
 
+  const handleShareWhatsApp = (invoice: any) => {
+    const customer = invoice.customer
+    const message = `*INVOICE*\n\nNomor: ${invoice.invoiceNumber}\nTanggal: ${new Date(invoice.invoiceDate).toLocaleDateString("id-ID")}\nJatuh Tempo: ${new Date(invoice.dueDate).toLocaleDateString("id-ID")}\nTotal: Rp ${invoice.totalAmount.toLocaleString("id-ID")}\nSisa: Rp ${invoice.remainingAmount.toLocaleString("id-ID")}\n\nMohon segera melakukan pembayaran.`
+    
+    const phone = customer?.phone?.replace(/\D/g, "")
+    if (phone) {
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
+    } else {
+      alert("Nomor telepon customer tidak tersedia")
+    }
+  }
+
+  const handleDownloadPDF = (invoice: any) => {
+    setSelectedInvoice(invoice)
+    setTimeout(() => {
+      window.print()
+    }, 100)
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount)
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div className="flex justify-end">
@@ -119,6 +147,20 @@ export default function InvoiceManager({ organizationId }: { organizationId: str
                 </div>
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={() => handleShareWhatsApp(invoice)}
+                  className="rounded-lg p-2 text-green-600 hover:bg-green-50"
+                  title="Share WhatsApp"
+                >
+                  <Share2 size={16} />
+                </button>
+                <button
+                  onClick={() => handleDownloadPDF(invoice)}
+                  className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
+                  title="Download PDF"
+                >
+                  <Download size={16} />
+                </button>
                 {invoice.status === "DRAFT" && (
                   <button
                     onClick={() => handleUpdateStatus(invoice, "SENT")}
@@ -263,6 +305,61 @@ export default function InvoiceManager({ organizationId }: { organizationId: str
           </div>
         </div>
       )}
+
+      {/* Print Template (Hidden) */}
+      <div ref={printRef} className="hidden print:block p-8">
+        {selectedInvoice && (
+          <div className="bg-white p-8">
+            <h1 className="text-2xl font-bold text-slate-800 mb-4">INVOICE</h1>
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <p className="font-bold">Nomor Invoice:</p>
+                <p>{selectedInvoice.invoiceNumber}</p>
+              </div>
+              <div>
+                <p className="font-bold">Tanggal:</p>
+                <p>{new Date(selectedInvoice.invoiceDate).toLocaleDateString("id-ID")}</p>
+              </div>
+              <div>
+                <p className="font-bold">Jatuh Tempo:</p>
+                <p>{new Date(selectedInvoice.dueDate).toLocaleDateString("id-ID")}</p>
+              </div>
+            </div>
+            <div className="mb-6">
+              <p className="font-bold">Customer:</p>
+              <p>{selectedInvoice.customer?.name}</p>
+              <p>{selectedInvoice.customer?.address}</p>
+            </div>
+            <table className="w-full border-collapse mb-6">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2">Deskripsi</th>
+                  <th className="text-right py-2">Qty</th>
+                  <th className="text-right py-2">Harga</th>
+                  <th className="text-right py-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedInvoice.items?.map((item: any) => (
+                  <tr key={item.id} className="border-b">
+                    <td className="py-2">{item.description}</td>
+                    <td className="text-right py-2">{item.quantity}</td>
+                    <td className="text-right py-2">{formatCurrency(parseFloat(item.unitPrice))}</td>
+                    <td className="text-right py-2">{formatCurrency(parseFloat(item.total))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="text-right">
+              <p className="font-bold">Subtotal: {formatCurrency(parseFloat(selectedInvoice.subtotal))}</p>
+              <p className="font-bold">Tax: {formatCurrency(parseFloat(selectedInvoice.taxAmount))}</p>
+              <p className="font-bold text-lg">Total: {formatCurrency(parseFloat(selectedInvoice.totalAmount))}</p>
+              <p className="text-slate-600">Paid: {formatCurrency(parseFloat(selectedInvoice.paidAmount))}</p>
+              <p className="font-bold text-emerald-600">Remaining: {formatCurrency(parseFloat(selectedInvoice.remainingAmount))}</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

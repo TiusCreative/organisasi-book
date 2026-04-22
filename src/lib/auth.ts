@@ -222,7 +222,7 @@ export async function requireUser() {
 export async function requireAdmin() {
   const user = await requireUser()
   if (user.role !== "ADMIN") {
-    redirect("/")
+    redirect("/dashboard")
   }
   return user
 }
@@ -230,7 +230,7 @@ export async function requireAdmin() {
 export async function requirePlatformAdmin() {
   const user = await requireUser()
   if (!user.isPlatformAdmin) {
-    redirect("/")
+    redirect("/dashboard")
   }
   return user
 }
@@ -238,7 +238,7 @@ export async function requirePlatformAdmin() {
 export async function requireOrganizationAdmin(options?: { allowExpired?: boolean }) {
   const { user } = await requireCurrentOrganization(options)
   if (user.role !== "ADMIN") {
-    redirect("/")
+    redirect("/dashboard")
   }
   return user
 }
@@ -249,7 +249,7 @@ export async function requireModuleAccess(
 ) {
   const context = await requireCurrentOrganization(options)
   if (!hasModulePermission(context.user, permission)) {
-    redirect("/")
+    redirect("/dashboard")
   }
   return context
 }

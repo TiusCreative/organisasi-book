@@ -1,8 +1,9 @@
-import { Settings, Download } from "lucide-react"
+import { Settings, Download, DollarSign } from "lucide-react"
 import OrganizationSettingsForm from "../../components/settings/OrganizationSettingsForm"
 import DatabaseExportImport from "../../components/settings/DatabaseExportImport"
 import DeleteOrganizationButton from "../../components/settings/DeleteOrganizationButton"
 import PeriodLockManager from "../../components/settings/PeriodLockManager"
+import CurrencyManagement from "../../components/settings/CurrencyManagement"
 import { requireCurrentOrganization, requireModuleAccess, requireOrganizationAdmin } from "../../lib/auth"
 import Link from "next/link"
 
@@ -52,6 +53,19 @@ export default async function PengaturanPage() {
         <PeriodLockManager />
       </div>
 
+      {/* Currency Management */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3 flex-col sm:flex-row">
+          <DollarSign size={24} className="text-emerald-600" />
+          <div>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Multi-Currency</h2>
+            <p className="text-xs sm:text-sm text-slate-500">Kelola mata uang dan kurs</p>
+          </div>
+        </div>
+        <CurrencyManagement organizationId={activeOrg.id} />
+      </div>
+
+      {/* 
       {/* Export/Import */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3 flex-col sm:flex-row">

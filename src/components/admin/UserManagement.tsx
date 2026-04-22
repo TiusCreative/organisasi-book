@@ -219,12 +219,12 @@ export default function UserManagement({ initialUsers, organizations }: UserMana
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-            <div className="border-b border-slate-100 px-6 py-4">
+          <div className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-xl overflow-hidden">
+            <div className="border-b border-slate-100 px-6 py-4 flex-shrink-0">
               <h3 className="text-lg font-bold text-slate-800">{title}</h3>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+            <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-bold text-slate-700">Nama</label>

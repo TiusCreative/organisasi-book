@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient }
+const globalForPrisma = global as unknown as { prisma?: PrismaClient }
 
 function normalizeConnectionString(url: string) {
   return url.trim().replace(/\r?\n\s*/g, "")
@@ -48,12 +48,20 @@ function resolveRuntimeDatabaseUrl() {
 
 const connectionString = resolveRuntimeDatabaseUrl()
 
+function hasRequiredDelegates(client: PrismaClient) {
+  const prismaClient = client as unknown as Record<string, unknown>
+  return typeof prismaClient.user !== "undefined" && typeof prismaClient.salesOrder !== "undefined"
+}
+
+const cachedPrisma = globalForPrisma.prisma
+
 export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    adapter: new PrismaPg({
-      connectionString: connectionString as string,
-    }),
-  })
+  cachedPrisma && hasRequiredDelegates(cachedPrisma)
+    ? cachedPrisma
+    : new PrismaClient({
+        adapter: new PrismaPg({
+          connectionString: connectionString as string,
+        }),
+      })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
