@@ -15,6 +15,10 @@ export const MODULE_PERMISSION_LABELS = {
   retainedEarnings: "Laporan Laba Ditahan",
   reservesDistribution: "Laporan Cadangan & Distribusi",
   generalLedger: "Buku Besar",
+  businessCombination: "Kombinasi Bisnis",
+  consolidatedStatements: "Laporan Konsolidasi",
+  segmentReporting: "Segment Reporting (PSAK 7)",
+  financialPresentation: "Presentasi Laporan Keuangan (PSAK 1)",
   // Laporan Operasional
   reportOperational: "Laporan Operasional",
   arap: "AR/AP",
@@ -78,7 +82,6 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, ModulePermission[]> = {
     "accounts",
     "assets",
     "depreciation",
-    "payroll",
     "taxes",
     "auditTrail",
     "subscription",

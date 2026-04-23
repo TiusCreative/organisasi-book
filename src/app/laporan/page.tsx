@@ -13,7 +13,9 @@ import {
   FileText,
   Target,
   Boxes,
-  ArrowRight
+  ArrowRight,
+  Building2,
+  Merge
 } from "lucide-react"
 import { 
   generateTransactionReport,
@@ -223,6 +225,54 @@ export default async function LaporanPage({ searchParams }: ReportPageProps) {
                   <div className="flex items-center gap-3">
                     <FileText className="text-blue-500" size={18} />
                     <span className="font-medium text-slate-700">Buku Besar</span>
+                  </div>
+                  <ArrowRight className="text-blue-400" size={16} />
+                </Link>
+              )}
+              {currentUser && hasModulePermission(currentUser, "businessCombination") && (
+                <Link
+                  href={`/laporan/kombinasi-bisnis?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`}
+                  className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3 hover:bg-blue-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <Merge className="text-blue-500" size={18} />
+                    <span className="font-medium text-slate-700">Kombinasi Bisnis</span>
+                  </div>
+                  <ArrowRight className="text-blue-400" size={16} />
+                </Link>
+              )}
+              {currentUser && hasModulePermission(currentUser, "consolidatedStatements") && (
+                <Link
+                  href={`/laporan/konsolidasi?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`}
+                  className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3 hover:bg-blue-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <Building2 className="text-blue-500" size={18} />
+                    <span className="font-medium text-slate-700">Laporan Konsolidasi</span>
+                  </div>
+                  <ArrowRight className="text-blue-400" size={16} />
+                </Link>
+              )}
+              {currentUser && hasModulePermission(currentUser, "segmentReporting") && (
+                <Link
+                  href={`/laporan/segment-reporting?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`}
+                  className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3 hover:bg-blue-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <PieChart className="text-blue-500" size={18} />
+                    <span className="font-medium text-slate-700">Segment Reporting (PSAK 7)</span>
+                  </div>
+                  <ArrowRight className="text-blue-400" size={16} />
+                </Link>
+              )}
+              {currentUser && hasModulePermission(currentUser, "financialPresentation") && (
+                <Link
+                  href={`/laporan/presentasi-keuangan?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`}
+                  className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3 hover:bg-blue-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText className="text-blue-500" size={18} />
+                    <span className="font-medium text-slate-700">Presentasi Keuangan (PSAK 1)</span>
                   </div>
                   <ArrowRight className="text-blue-400" size={16} />
                 </Link>
