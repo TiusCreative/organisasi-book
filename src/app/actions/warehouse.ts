@@ -4,8 +4,9 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { requireCurrentOrganization } from "@/lib/auth"
 import { hasModulePermission } from "@/lib/permissions"
+import type { Prisma } from "@prisma/client"
 
-async function generateNextWarehouseCode(tx: any, orgId: string) {
+async function generateNextWarehouseCode(tx: Prisma.TransactionClient, orgId: string) {
   const existingWarehouses = await tx.warehouse.findMany({
     where: { organizationId: orgId },
     select: { code: true },
@@ -94,8 +95,8 @@ export async function updateWarehouse(formData: FormData) {
     throw new Error("Data tidak lengkap")
   }
 
-  await prisma.warehouse.update({
-    where: { id },
+  const updated = await prisma.warehouse.updateMany({
+    where: { id, organizationId: organization.id },
     data: {
       name,
       location,
@@ -106,21 +107,29 @@ export async function updateWarehouse(formData: FormData) {
     }
   })
 
+  if (updated.count === 0) {
+    throw new Error("Gudang tidak ditemukan atau bukan milik organisasi aktif")
+  }
+
   revalidatePath("/warehouse")
   revalidatePath("/inventory")
   revalidatePath("/dashboard")
 }
 
 export async function deleteWarehouse(id: string) {
-  const { user } = await requireCurrentOrganization()
+  const { user, organization } = await requireCurrentOrganization()
 
   if (!hasModulePermission(user, "warehouse")) {
     throw new Error("Anda tidak memiliki izin untuk menghapus gudang")
   }
 
-  await prisma.warehouse.delete({
-    where: { id }
+  const deleted = await prisma.warehouse.deleteMany({
+    where: { id, organizationId: organization.id }
   })
+
+  if (deleted.count === 0) {
+    throw new Error("Gudang tidak ditemukan atau bukan milik organisasi aktif")
+  }
 
   revalidatePath("/warehouse")
   revalidatePath("/inventory")

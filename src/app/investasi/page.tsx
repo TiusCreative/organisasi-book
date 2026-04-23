@@ -1,4 +1,5 @@
-import { Landmark, LineChart, Wallet } from "lucide-react"
+import { Landmark, LineChart, Wallet, ArrowLeft } from "lucide-react"
+import Link from "next/link"
 import { prisma } from "../../lib/prisma"
 import InvestmentModal from "../../components/forms/InvestmentModal"
 import EditInvestmentModal from "../../components/forms/EditInvestmentModal"
@@ -49,6 +50,12 @@ export default async function InvestasiPage() {
 
   return (
     <div className="max-w-full lg:max-w-6xl mx-auto px-4 sm:px-0 space-y-6">
+      <div className="mb-6">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+          <span>Kembali ke Dashboard</span>
+        </Link>
+      </div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Deposito, Saham & Investasi</h1>

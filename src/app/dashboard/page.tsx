@@ -22,21 +22,25 @@ export default async function DashboardPage() {
         }
       }
     })
-  } catch {
+  } catch (error) {
+    console.error("Dashboard: Error fetching organization:", error)
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-rose-50 flex items-center justify-center p-4">
         <div className="w-full max-w-2xl rounded-3xl border border-amber-200 bg-white p-8 shadow-xl">
-          <div className="mb-6 flex items-center gap-4">
-            <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
-              <Package size={32} />
-            </div>
-          </div>
-          <div className="mt-6">
+          <h1 className="text-2xl font-bold text-amber-800 mb-4">Terjadi Kesalahan</h1>
+          <p className="text-slate-600 mb-6">Gagal memuat data organisasi. Silakan coba lagi atau hubungi administrator.</p>
+          <div className="mt-6 flex gap-4">
             <Link
-              href="/register"
+              href="/dashboard"
               className="inline-flex items-center rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 transition-colors"
             >
-              Buka Halaman Setup
+              Coba Lagi
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Logout
             </Link>
           </div>
         </div>

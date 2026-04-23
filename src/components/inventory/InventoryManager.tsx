@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import BarcodeScannerModal from "@/components/ui/BarcodeScannerModal"
 import {
   completeStockOpname,
   createInventoryItem,
@@ -93,6 +94,9 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
   const [showItemModal, setShowItemModal] = useState(false)
   const [showWarehouseModal, setShowWarehouseModal] = useState(false)
   const [showOpnameModal, setShowOpnameModal] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [scannerMode, setScannerMode] = useState<"item_barcode" | "opname_item">("item_barcode")
+  const [opnameScanValue, setOpnameScanValue] = useState("")
 
   const [itemForm, setItemForm] = useState({
     warehouseId: "",
@@ -139,6 +143,47 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
 
     return { totalSku, totalStockValue, lowStockCount, totalWarehouses }
   }, [items, warehouses])
+
+  const openScanner = (mode: "item_barcode" | "opname_item") => {
+    setScannerMode(mode)
+    setScannerOpen(true)
+  }
+
+  const selectOpnameItemByCode = (rawValue: string) => {
+    const value = String(rawValue || "").trim()
+    if (!value) return
+
+    setOpnameScanValue(value)
+    const normalized = value.toLowerCase()
+    const scoped = items.filter((row) => !opnameForm.warehouseId || row.warehouseId === opnameForm.warehouseId)
+    const matched =
+      scoped.find((row) => (row.barcode || "").trim().toLowerCase() === normalized) ??
+      scoped.find((row) => row.code.trim().toLowerCase() === normalized)
+
+    if (!matched) {
+      setError(`Item dengan barcode/SKU "${value}" tidak ditemukan di gudang terpilih.`)
+      return
+    }
+
+    setError("")
+    setOpnameForm((prev) => ({
+      ...prev,
+      warehouseId: prev.warehouseId || matched.warehouseId,
+      itemId: matched.id,
+    }))
+  }
+
+  const handleDetectedCode = (rawValue: string) => {
+    const value = String(rawValue || "").trim()
+    if (!value) return
+
+    if (scannerMode === "item_barcode") {
+      setItemForm((prev) => ({ ...prev, barcode: value }))
+      return
+    }
+
+    selectOpnameItemByCode(value)
+  }
 
   const refreshAll = async () => {
     const [nextItems, nextWarehouses, nextStockOpnames, nextMovements] = await Promise.all([
@@ -239,9 +284,13 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
     startTransition(async () => {
       try {
         setError("")
-        await completeStockOpname(id)
+        const result = await completeStockOpname(id)
         await refreshAll()
-        setMessage("Stock opname selesai. Stok sistem sudah disesuaikan.")
+        if (result?.pendingApproval) {
+          setMessage("Stock opname menunggu approval MANAGER/ADMIN.")
+        } else {
+          setMessage("Stock opname selesai. Stok sistem sudah disesuaikan.")
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Gagal menyelesaikan stock opname")
       }
@@ -345,6 +394,13 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
 
   return (
     <div className="space-y-4" id="inventory-report-print">
+      <BarcodeScannerModal
+        open={scannerOpen}
+        title="Scan Barcode / QR"
+        description={scannerMode === "opname_item" ? "Scan barcode/SKU untuk memilih item stock opname." : "Scan untuk mengisi barcode item."}
+        onClose={() => setScannerOpen(false)}
+        onDetected={handleDetectedCode}
+      />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
           <div className="text-sm text-blue-700">Total SKU</div>
@@ -548,7 +604,16 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
                 ))}
               </select>
               <input value={itemForm.code} onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })} placeholder="SKU / Kode Barang" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={itemForm.barcode} onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })} placeholder="Barcode" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <div className="flex gap-2">
+                <input value={itemForm.barcode} onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })} placeholder="Barcode" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <button
+                  type="button"
+                  onClick={() => openScanner("item_barcode")}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Scan
+                </button>
+              </div>
               <input value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Nama Barang" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               <input value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })} placeholder="Kategori" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               <select value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -565,6 +630,7 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
                 <option value="AVERAGE">Rata-rata (Average)</option>
                 <option value="FIFO">FIFO</option>
                 <option value="LIFO">LIFO</option>
+                <option value="STANDARD">Standar (Standard Cost)</option>
               </select>
               <input value={itemForm.shelf} onChange={(e) => setItemForm({ ...itemForm, shelf: e.target.value })} placeholder="Rak (A, B, C)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               <input value={itemForm.row} onChange={(e) => setItemForm({ ...itemForm, row: e.target.value })} placeholder="Baris (1, 2, 3)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
@@ -619,6 +685,31 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
                 ))}
               </select>
               <input value={opnameForm.code} onChange={(e) => setOpnameForm({ ...opnameForm, code: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <div className="flex gap-2">
+                <input
+                  value={opnameScanValue}
+                  onChange={(e) => setOpnameScanValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") selectOpnameItemByCode(opnameScanValue)
+                  }}
+                  placeholder="Scan/Input barcode atau SKU"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => selectOpnameItemByCode(opnameScanValue)}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cari
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openScanner("opname_item")}
+                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  Scan
+                </button>
+              </div>
               <select value={opnameForm.itemId} onChange={(e) => setOpnameForm({ ...opnameForm, itemId: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <option value="">Pilih Barang</option>
                 {items.filter((row) => !opnameForm.warehouseId || row.warehouseId === opnameForm.warehouseId).map((row) => (

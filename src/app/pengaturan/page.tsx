@@ -1,4 +1,4 @@
-import { Settings, Download, DollarSign } from "lucide-react"
+import { Settings, Download, DollarSign, ArrowLeft } from "lucide-react"
 import OrganizationSettingsForm from "../../components/settings/OrganizationSettingsForm"
 import DatabaseExportImport from "../../components/settings/DatabaseExportImport"
 import DeleteOrganizationButton from "../../components/settings/DeleteOrganizationButton"
@@ -23,6 +23,12 @@ export default async function PengaturanPage() {
 
   return (
     <div className="max-w-full lg:max-w-6xl mx-auto px-4 sm:px-0 space-y-6">
+      <div className="mb-6">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+          <span>Kembali ke Dashboard</span>
+        </Link>
+      </div>
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Pengaturan</h1>
         <p className="text-slate-500 text-sm mt-1">Kelola konfigurasi organisasi dan ekspor/impor data</p>

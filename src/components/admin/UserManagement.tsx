@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import { Eye, EyeOff } from "lucide-react"
 import {
   createAdminManagedUser,
   generateManagedUserInvite,
@@ -47,6 +48,7 @@ export default function UserManagement({ initialUsers, organizations }: UserMana
   const [error, setError] = useState("")
   const [form, setForm] = useState(defaultForm)
   const [isPending, startTransition] = useTransition()
+  const [showPassword, setShowPassword] = useState(false)
 
   const title = useMemo(() => (form.id ? "Edit User" : "Tambah User"), [form.id])
 
@@ -77,7 +79,17 @@ export default function UserManagement({ initialUsers, organizations }: UserMana
 
     startTransition(async () => {
       const formData = new FormData()
-      Object.entries(form).forEach(([key, value]) => formData.set(key, value))
+      formData.set("id", form.id)
+      formData.set("name", form.name)
+      formData.set("email", form.email)
+      formData.set("password", form.password)
+      formData.set("role", form.role)
+      formData.set("status", form.status)
+      formData.set("organizationId", form.organizationId)
+
+      for (const permission of form.permissions) {
+        formData.append("permissions", permission)
+      }
 
       const result = form.id
         ? await updateManagedUser(formData)
@@ -252,14 +264,23 @@ export default function UserManagement({ initialUsers, organizations }: UserMana
                   <label className="mb-1 block text-sm font-bold text-slate-700">
                     {form.id ? "Password Baru" : "Password"}
                   </label>
-                  <input
-                    type="password"
-                    value={form.password}
-                    onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3"
-                    placeholder={form.id ? "Kosongkan jika tidak diubah" : "Masukkan password awal"}
-                    required={!form.id}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={form.password}
+                      onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-12"
+                      placeholder={form.id ? "Kosongkan jika tidak diubah" : "Masukkan password awal"}
+                      required={!form.id}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-bold text-slate-700">Role</label>

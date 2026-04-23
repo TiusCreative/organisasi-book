@@ -14,7 +14,7 @@ type IncomeStatementPageProps = {
 }
 
 export default async function IncomeStatementPage({ searchParams }: IncomeStatementPageProps) {
-  const { organization } = await requireModuleAccess("reports")
+  const { organization } = await requireModuleAccess("incomeStatement")
   const activeOrg = await prisma.organization.findUnique({
     where: { id: organization.id },
     include: {

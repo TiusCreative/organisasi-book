@@ -1,9 +1,10 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
-import { requireCurrentOrganization } from "@/lib/auth"
+import { requireCurrentOrganization, requireWritableCurrentOrganization } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
 import type { Prisma } from "@prisma/client"
+import { postInventoryMovementInTx, adjustInventoryItemToQuantityInTx } from "@/lib/inventory-ledger"
 
 export async function getInventoryItems(organizationId: string, warehouseId?: string) {
   const { organization } = await requireCurrentOrganization()
@@ -70,7 +71,7 @@ export async function createInventoryItem(data: {
   maxStock?: number
   unitCost?: number
 }) {
-  const { organization } = await requireCurrentOrganization()
+  const { organization } = await requireWritableCurrentOrganization()
   if (!organization || organization.id !== data.organizationId) {
     throw new Error("Unauthorized")
   }
@@ -112,83 +113,40 @@ export async function createInventoryMovement(data: {
   description?: string
   fromWarehouseId?: string
   toWarehouseId?: string
+  idempotencyKey?: string
 }) {
-  const { user } = await requireCurrentOrganization()
-  if (!user?.id) {
+  const { user, organization } = await requireWritableCurrentOrganization()
+  if (!user?.id || !organization || organization.id !== data.organizationId) {
     throw new Error("Unauthorized")
   }
 
-  const item = await prisma.inventoryItem.findUnique({
-    where: { id: data.itemId }
-  })
-
-  if (!item) {
-    throw new Error("Inventory item not found")
+  if (data.movementType === "ADJUSTMENT" && !["ADMIN", "MANAGER"].includes(user.role)) {
+    throw new Error("Mutasi ADJUSTMENT memerlukan approval MANAGER/ADMIN.")
   }
 
-  const unitCost = data.unitCost || item.unitCost
-  const totalCost = data.quantity * unitCost
-
-  // Update inventory item quantity
-  let newQuantity = item.quantity
-  if (data.movementType === "IN") {
-    newQuantity += data.quantity
-    // Update average cost for FIFO/AVERAGE
-    if (item.valuationMethod === "AVERAGE" && item.quantity > 0) {
-      const totalValue = item.totalValue + totalCost
-      newQuantity = item.quantity + data.quantity
-      const newUnitCost = totalValue / newQuantity
-      await prisma.inventoryItem.update({
-        where: { id: data.itemId },
-        data: {
-          quantity: newQuantity,
-          unitCost: newUnitCost,
-          totalValue: totalValue
-        }
-      })
-    } else {
-      await prisma.inventoryItem.update({
-        where: { id: data.itemId },
-        data: {
-          quantity: newQuantity,
-          totalValue: item.totalValue + totalCost
-        }
-      })
-    }
-  } else if (data.movementType === "OUT") {
-    newQuantity -= data.quantity
-    await prisma.inventoryItem.update({
-      where: { id: data.itemId },
-      data: {
-        quantity: newQuantity,
-        totalValue: Math.max(0, item.totalValue - totalCost)
-      }
-    })
-  } else if (data.movementType === "ADJUSTMENT") {
-    newQuantity = data.quantity
-    await prisma.inventoryItem.update({
-      where: { id: data.itemId },
-      data: {
-        quantity: newQuantity,
-        totalValue: newQuantity * unitCost
-      }
-    })
+  const quantity = Number(data.quantity || 0)
+  if (quantity <= 0) {
+    throw new Error("Quantity harus lebih dari 0")
   }
 
-  const movement = await prisma.inventoryMovement.create({
-    data: {
+  if (data.movementType === "TRANSFER" && (!data.fromWarehouseId || !data.toWarehouseId)) {
+    throw new Error("Transfer wajib memiliki fromWarehouseId dan toWarehouseId")
+  }
+
+  const movement = await prisma.$transaction(async (tx) => {
+    return await postInventoryMovementInTx(tx, {
       organizationId: data.organizationId,
       itemId: data.itemId,
       movementType: data.movementType,
-      quantity: data.quantity,
-      unitCost,
-      totalCost,
+      quantity,
+      unitCost: data.unitCost,
       reference: data.reference,
       description: data.description,
       fromWarehouseId: data.fromWarehouseId,
       toWarehouseId: data.toWarehouseId,
-      performedBy: user.id
-    }
+      performedBy: user.id,
+      idempotencyKey: data.idempotencyKey,
+    })
   })
 
   revalidatePath("/inventory")
@@ -234,9 +192,31 @@ export async function createStockOpname(data: {
     unitCost?: number
   }[]
 }) {
-  const { user } = await requireCurrentOrganization()
-  if (!user?.id) {
+  const { user, organization } = await requireWritableCurrentOrganization()
+  if (!user?.id || !organization || organization.id !== data.organizationId) {
     throw new Error("Unauthorized")
+  }
+
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { id: data.warehouseId, organizationId: data.organizationId },
+    select: { id: true },
+  })
+  if (!warehouse) {
+    throw new Error("Warehouse tidak ditemukan atau bukan milik organisasi aktif")
+  }
+
+  const itemIds = data.items.map((item) => item.itemId)
+  if (itemIds.length > 0) {
+    const validItems = await prisma.inventoryItem.count({
+      where: {
+        organizationId: data.organizationId,
+        warehouseId: data.warehouseId,
+        id: { in: itemIds },
+      },
+    })
+    if (validItems !== itemIds.length) {
+      throw new Error("Ada item stock opname yang tidak valid untuk warehouse ini")
+    }
   }
 
   const stockOpname = await prisma.$transaction(async (tx) => {
@@ -277,13 +257,13 @@ export async function createStockOpname(data: {
 }
 
 export async function completeStockOpname(id: string) {
-  const { user } = await requireCurrentOrganization()
-  if (!user?.id) {
+  const { user, organization } = await requireWritableCurrentOrganization()
+  if (!user?.id || !organization) {
     throw new Error("Unauthorized")
   }
 
-  const stockOpname = await prisma.stockOpname.findUnique({
-    where: { id },
+  const stockOpname = await prisma.stockOpname.findFirst({
+    where: { id, organizationId: organization.id },
     include: { items: true }
   })
 
@@ -291,48 +271,49 @@ export async function completeStockOpname(id: string) {
     throw new Error("Stock Opname not found")
   }
 
-  // Create adjustments for differences
+  if (!["ADMIN", "MANAGER"].includes(user.role)) {
+    await prisma.stockOpname.update({
+      where: { id },
+      data: { status: "PENDING_APPROVAL" },
+    })
+    revalidatePath("/inventory")
+    return { success: true, pendingApproval: true }
+  }
+
   await prisma.$transaction(async (tx) => {
-    for (const item of stockOpname.items) {
-      if (item.difference !== 0) {
-        // Update inventory item quantity
-        const invItem = await tx.inventoryItem.findUnique({
-          where: { id: item.itemId }
+    for (const row of stockOpname.items) {
+      if (row.difference === 0) continue
+      try {
+        await adjustInventoryItemToQuantityInTx(tx, {
+          organizationId: stockOpname.organizationId,
+          itemId: row.itemId,
+          targetQuantity: row.physicalQuantity,
+          unitCost: row.unitCost ?? undefined,
+          reference: `SO-${stockOpname.code}`,
+          description: "Stock Opname Adjustment",
+          performedBy: user.id,
+          expectedWarehouseId: stockOpname.warehouseId,
         })
-
-        if (invItem) {
-          await tx.inventoryItem.update({
-            where: { id: item.itemId },
-            data: {
-              quantity: item.physicalQuantity,
-              totalValue: item.physicalQuantity * (item.unitCost || invItem.unitCost)
-            }
-          })
-
-          // Create inventory movement for adjustment
-          await tx.inventoryMovement.create({
-            data: {
-              organizationId: stockOpname.organizationId,
-              itemId: item.itemId,
-              movementType: "ADJUSTMENT",
-              quantity: Math.abs(item.difference),
-              unitCost: item.unitCost,
-              totalCost: Math.abs(item.totalDifference || 0),
-              reference: `SO-${stockOpname.code}`,
-              description: "Stock Opname Adjustment",
-              performedBy: user.id
-            }
-          })
+      } catch (error) {
+        // If stock already matches target at approval time, skip quietly.
+        const message = error instanceof Error ? error.message : String(error)
+        if (!message.includes("Tidak ada selisih quantity")) {
+          throw error
         }
       }
     }
 
     await tx.stockOpname.update({
       where: { id },
-      data: { status: "COMPLETED" }
+      data: {
+        status: "COMPLETED",
+        approvedBy: user.id,
+        approvedAt: new Date(),
+      },
     })
   })
 
   revalidatePath("/inventory")
   revalidatePath("/laporan/inventory")
+  return { success: true, pendingApproval: false }
 }

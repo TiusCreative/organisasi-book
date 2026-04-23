@@ -1,10 +1,20 @@
 import { TrendingUp, TrendingDown, DollarSign } from "lucide-react"
 import { requireCurrentOrganization, requireModuleAccess } from "../../../lib/auth"
 import CashFlowStatement from "../../../components/reports/CashFlowStatement"
+import { resolveDateRange, formatInputDate } from "../../../lib/date-range"
 
-export default async function CashFlowPage() {
-  await requireModuleAccess("reports")
+type CashFlowPageProps = {
+  searchParams?: Promise<{
+    startDate?: string
+    endDate?: string
+  }>
+}
+
+export default async function CashFlowPage({ searchParams }: CashFlowPageProps) {
+  await requireModuleAccess("cashFlow")
   const { organization: activeOrg } = await requireCurrentOrganization()
+  const params = searchParams ? await searchParams : {}
+  const { startDate, endDate } = resolveDateRange(params)
 
   if (!activeOrg) {
     return (
@@ -30,7 +40,7 @@ export default async function CashFlowPage() {
             <p className="text-xs sm:text-sm text-slate-500">Analisis cash flow operasional, investasi, dan financing</p>
           </div>
         </div>
-        <CashFlowStatement organizationId={activeOrg.id} />
+        <CashFlowStatement organizationId={activeOrg.id} initialStartDate={formatInputDate(startDate)} initialEndDate={formatInputDate(endDate)} />
       </div>
     </div>
   )

@@ -18,6 +18,7 @@ const ASSET_CATEGORIES = [
   { value: 'Peralatan', label: 'Peralatan' },
   { value: 'Furniture', label: 'Furniture dan Perlengkapan' },
   { value: 'Elektronik', label: 'Elektronik dan Komputer' },
+  { value: 'Aset Tak Berwujud', label: 'Aset Tak Berwujud (Software/Lisensi/Goodwill)' },
   { value: 'Lainnya', label: 'Lainnya' }
 ]
 

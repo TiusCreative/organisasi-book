@@ -1,4 +1,4 @@
-import { Plus, Building2 } from "lucide-react"
+import { Plus, Building2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import DeleteFixedAssetButton from "../../components/DeleteFixedAssetButton"
 import { getFixedAssetsWithBookValue } from "../../lib/fixed-assets-ledger"
@@ -22,6 +22,12 @@ export default async function AsetPage() {
 
   return (
     <div className="max-w-full lg:max-w-6xl mx-auto px-4 sm:px-0 space-y-6">
+      <div className="mb-6">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+          <span>Kembali ke Dashboard</span>
+        </Link>
+      </div>
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

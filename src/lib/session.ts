@@ -3,7 +3,11 @@ import { UserRole } from "@prisma/client"
 export const SESSION_COOKIE = "orgbook_session"
 
 function getAuthSecret() {
-  return process.env.AUTH_SECRET || "dev-orgbook-secret-change-me"
+  const secret = process.env.AUTH_SECRET
+  if (process.env.NODE_ENV === "production" && (!secret || !secret.trim())) {
+    throw new Error("AUTH_SECRET wajib diset di production")
+  }
+  return secret || "dev-orgbook-secret-change-me"
 }
 
 function bytesToBase64(bytes: Uint8Array) {

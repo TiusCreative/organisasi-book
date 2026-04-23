@@ -3,14 +3,25 @@
 import { useState, useEffect } from "react"
 import { getCashFlowStatement } from "../../app/actions/cashflow"
 
-export default function CashFlowStatement({ organizationId }: { organizationId: string }) {
+type FlowLine = { label: string; amount: number }
+type CashFlowResult = Awaited<ReturnType<typeof getCashFlowStatement>>
+
+export default function CashFlowStatement({
+  organizationId,
+  initialStartDate,
+  initialEndDate,
+}: {
+  organizationId: string
+  initialStartDate?: string
+  initialEndDate?: string
+}) {
   const [startDate, setStartDate] = useState(
-    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]
+    initialStartDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]
   )
   const [endDate, setEndDate] = useState(
-    new Date().toISOString().split("T")[0]
+    initialEndDate || new Date().toISOString().split("T")[0]
   )
-  const [cashFlow, setCashFlow] = useState<any>(null)
+  const [cashFlow, setCashFlow] = useState<CashFlowResult | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -30,6 +41,24 @@ export default function CashFlowStatement({ organizationId }: { organizationId: 
       currency: "IDR",
       minimumFractionDigits: 0,
     }).format(amount)
+  }
+
+  const renderTopLines = (title: string, lines: FlowLine[]) => {
+    const top = (lines || []).slice(0, 8)
+    if (top.length === 0) return null
+    return (
+      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div className="text-sm font-bold text-slate-800 mb-2">{title}</div>
+        <div className="space-y-1">
+          {top.map((row) => (
+            <div key={row.label} className="flex justify-between text-xs text-slate-700">
+              <span className="truncate pr-4">{row.label}</span>
+              <span className="font-mono">{formatCurrency(row.amount)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -85,6 +114,8 @@ export default function CashFlowStatement({ organizationId }: { organizationId: 
                 </span>
               </div>
             </div>
+            {renderTopLines("Top Pemasukan Operasional", cashFlow.operating.linesIn || [])}
+            {renderTopLines("Top Pengeluaran Operasional", cashFlow.operating.linesOut || [])}
           </div>
 
           {/* Investing Activities */}
@@ -106,6 +137,8 @@ export default function CashFlowStatement({ organizationId }: { organizationId: 
                 </span>
               </div>
             </div>
+            {renderTopLines("Top Pemasukan Investasi", cashFlow.investing.linesIn || [])}
+            {renderTopLines("Top Pengeluaran Investasi", cashFlow.investing.linesOut || [])}
           </div>
 
           {/* Financing Activities */}
@@ -127,6 +160,8 @@ export default function CashFlowStatement({ organizationId }: { organizationId: 
                 </span>
               </div>
             </div>
+            {renderTopLines("Top Pemasukan Financing", cashFlow.financing.linesIn || [])}
+            {renderTopLines("Top Pengeluaran Financing", cashFlow.financing.linesOut || [])}
           </div>
 
           {/* Summary */}

@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma"
-import { Tag } from "lucide-react"
+import { Tag, ArrowLeft } from "lucide-react"
+import Link from "next/link"
 import CategoryModal from "../../components/forms/CategoryModal"
 import EditCategoryModal from "../../components/forms/EditCategoryModal"
 import AddAccountModal from "../../components/forms/AddAccountModal"
@@ -26,6 +27,12 @@ export default async function AkunPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      <div className="mb-6">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+          <span>Kembali ke Dashboard</span>
+        </Link>
+      </div>
       {/* Categories Section */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">

@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { Eye, EyeOff } from "lucide-react"
 import { registerOrganizationOwner } from "../../app/actions/auth"
 
 export default function RegisterForm() {
   const [error, setError] = useState("")
   const [isPending, startTransition] = useTransition()
+  const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -70,14 +72,23 @@ export default function RegisterForm() {
         </div>
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
-          <input
-            type="password"
-            name="password"
-            minLength={8}
-            required
-            className="w-full rounded-xl border border-slate-200 px-4 py-3"
-            placeholder="Minimal 8 karakter"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              name="password"
+              minLength={8}
+              required
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-12"
+              placeholder="Minimal 8 karakter"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
         </div>
       </div>
 

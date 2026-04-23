@@ -26,6 +26,9 @@ function buildSupabaseDirectUrl(url: string) {
       return null;
     }
 
+    // Supabase direct host authenticates with the `postgres` DB user.
+    // Pooler URLs often use `postgres.<project-ref>` usernames.
+    parsed.username = "postgres";
     parsed.hostname = `db.${projectRef}.supabase.co`;
     parsed.port = "5432";
     parsed.searchParams.delete("pgbouncer");

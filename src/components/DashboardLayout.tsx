@@ -1,11 +1,26 @@
 "use client"
 
 import { useState, useTransition } from 'react'
-import { Menu, X, LayoutDashboard, ReceiptText, FileBarChart, Settings, Building2, ChevronDown, Landmark, Users, Package, LineChart, BadgePercent, Shield, FileText, Clock, Wrench, Boxes, Target, UserCheck, Truck, DollarSign } from 'lucide-react'
+import { Menu, X, LayoutDashboard, ReceiptText, FileBarChart, Settings, Building2, ChevronDown, ChevronRight, Landmark, Users, Package, LineChart, BadgePercent, Shield, FileText, Clock, Wrench, Boxes, Target, UserCheck, Truck, DollarSign, PieChart, TrendingUp, Briefcase, Wallet } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { logoutUser } from '../app/actions/auth'
-import { hasModulePermission } from '../lib/permissions'
+import { hasModulePermission, type ModulePermission } from '../lib/permissions'
+
+// Menu item types
+interface MenuItem {
+  name: string
+  icon: React.ElementType
+  href: string
+  permission: ModulePermission
+}
+
+interface MenuGroup {
+  name: string
+  icon: React.ElementType
+  permission: ModulePermission
+  items: MenuItem[]
+}
 
 export default function DashboardLayout({
   children,
@@ -17,55 +32,141 @@ export default function DashboardLayout({
     role: "ADMIN" | "MANAGER" | "STAFF" | "VIEWER"
     permissions: string[]
     isPlatformAdmin: boolean
+    organizationName?: string
   } | null
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(['laporan'])
   const [isPending, startTransition] = useTransition()
-  const pathname = usePathname() // Untuk mendeteksi kita sedang di halaman mana
+  const pathname = usePathname()
   const router = useRouter()
 
   if (pathname.startsWith("/login") || pathname.startsWith("/register")) {
     return <>{children}</>
   }
 
-  const appMenuItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', permission: 'dashboard' },
-    { name: 'Transaksi', icon: ReceiptText, href: '/transaksi', permission: 'transactions' },
-    { name: 'AR/AP', icon: FileText, href: '/arap', permission: 'arap' },
-    { name: 'Purchase Order', icon: FileText, href: '/po', permission: 'arap' },
-    { name: 'Rekening Bank', icon: Landmark, href: '/bank', permission: 'bank' },
-    { name: 'Customer', icon: UserCheck, href: '/customer', permission: 'customer' },
-    { name: 'Supplier', icon: Truck, href: '/supplier', permission: 'supplier' },
-    { name: 'Warehouse', icon: Building2, href: '/warehouse', permission: 'warehouse' },
-    { name: 'Branch', icon: Building2, href: '/branch', permission: 'branch' },
-    { name: 'Sales Team', icon: Users, href: '/sales-team', permission: 'sales' },
-    { name: 'Work Order', icon: Wrench, href: '/work-order', permission: 'workOrder' },
-    { name: 'Sales / Marketing', icon: Target, href: '/sales', permission: 'sales' },
-    { name: 'Inventory', icon: Boxes, href: '/inventory', permission: 'inventory' },
-    { name: 'Budget', icon: DollarSign, href: '/budget', permission: 'reports' },
-    { name: 'Investasi', icon: LineChart, href: '/investasi', permission: 'investments' },
-    { name: 'Laporan', icon: FileBarChart, href: '/laporan', permission: 'reports' },
-    { name: 'Daftar Akun', icon: Settings, href: '/akun', permission: 'accounts' },
-    { name: 'Aset', icon: Package, href: '/aset', permission: 'assets' },
-    { name: 'Penyusutan', icon: Settings, href: '/penyusutan', permission: 'depreciation' },
-    { name: 'Gaji', icon: Users, href: '/gaji', permission: 'payroll' },
-    { name: 'Pajak', icon: BadgePercent, href: '/pajak', permission: 'taxes' },
-    { name: 'Berlangganan', icon: Shield, href: '/berlangganan', permission: 'subscription' },
-  ] as const
-  const visibleAppMenuItems = currentUser
-    ? appMenuItems.filter((item) => hasModulePermission(currentUser, item.permission))
+  // Single menu items (non-grouped)
+  const singleMenuItems: MenuItem[] = [
+    { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', permission: 'dashboard' as ModulePermission },
+    { name: 'Transaksi', icon: ReceiptText, href: '/transaksi', permission: 'transactions' as ModulePermission },
+    { name: 'AR/AP', icon: FileText, href: '/arap', permission: 'arap' as ModulePermission },
+    { name: 'Purchase Order', icon: FileText, href: '/po', permission: 'arap' as ModulePermission },
+    { name: 'Rekening Bank', icon: Landmark, href: '/bank', permission: 'bank' as ModulePermission },
+    { name: 'Customer', icon: UserCheck, href: '/customer', permission: 'customer' as ModulePermission },
+    { name: 'Supplier', icon: Truck, href: '/supplier', permission: 'supplier' as ModulePermission },
+    { name: 'Warehouse', icon: Building2, href: '/warehouse', permission: 'warehouse' as ModulePermission },
+    { name: 'Branch', icon: Building2, href: '/branch', permission: 'branch' as ModulePermission },
+    { name: 'Sales Team', icon: Users, href: '/sales-team', permission: 'sales' as ModulePermission },
+    { name: 'Work Order', icon: Wrench, href: '/work-order', permission: 'workOrder' as ModulePermission },
+    { name: 'Sales / Marketing', icon: Target, href: '/sales', permission: 'sales' as ModulePermission },
+    { name: 'Inventory', icon: Boxes, href: '/inventory', permission: 'inventory' as ModulePermission },
+    { name: 'Budget', icon: DollarSign, href: '/budget', permission: 'budget' as ModulePermission },
+    { name: 'Investasi', icon: LineChart, href: '/investasi', permission: 'investments' as ModulePermission },
+    { name: 'Daftar Akun', icon: Settings, href: '/akun', permission: 'accounts' as ModulePermission },
+    { name: 'Aset', icon: Package, href: '/aset', permission: 'assets' as ModulePermission },
+    { name: 'Penyusutan', icon: Settings, href: '/penyusutan', permission: 'depreciation' as ModulePermission },
+    { name: 'Gaji', icon: Users, href: '/gaji', permission: 'payroll' as ModulePermission },
+    { name: 'Pajak', icon: BadgePercent, href: '/pajak', permission: 'taxes' as ModulePermission },
+    { name: 'Berlangganan', icon: Shield, href: '/berlangganan', permission: 'subscription' as ModulePermission },
+  ]
+
+  // Laporan (Reports) - Grouped by category
+  const reportMenuGroups: MenuGroup[] = [
+    {
+      name: 'Laporan Keuangan',
+      icon: PieChart,
+      permission: 'reportFinancial',
+      items: [
+        { name: 'Neraca', icon: FileBarChart, href: '/laporan/neraca', permission: 'balanceSheet' },
+        { name: 'Laba Rugi', icon: TrendingUp, href: '/laporan/laba-rugi', permission: 'incomeStatement' },
+        { name: 'Arus Kas', icon: Wallet, href: '/laporan/cash-flow', permission: 'cashFlow' },
+        { name: 'Perubahan Modal', icon: FileText, href: '/laporan/perubahan-modal', permission: 'equityChange' },
+        { name: 'Laba Ditahan', icon: FileText, href: '/laporan/laba-ditahan', permission: 'retainedEarnings' },
+        { name: 'Cadangan & Distribusi', icon: FileText, href: '/laporan/cadangan-distribusi', permission: 'reservesDistribution' },
+        { name: 'Buku Besar', icon: FileText, href: '/laporan/buku-besar', permission: 'generalLedger' },
+      ]
+    },
+    {
+      name: 'Laporan Operasional',
+      icon: Briefcase,
+      permission: 'reportOperational',
+      items: [
+        { name: 'AR/AP', icon: FileText, href: '/laporan/arap', permission: 'arap' },
+        { name: 'Purchase Order', icon: FileText, href: '/laporan/po', permission: 'reportPurchase' },
+        { name: 'Sales & Marketing', icon: Target, href: '/sales', permission: 'reportSales' },
+        { name: 'Inventory & Gudang', icon: Boxes, href: '/inventory', permission: 'reportInventory' },
+      ]
+    },
+    {
+      name: 'Laporan Aset & Investasi',
+      icon: LineChart,
+      permission: 'reportAssets',
+      items: [
+        { name: 'Aset Tak Berwujud', icon: FileText, href: '/laporan/aset-tak-berwujud', permission: 'intangibleAssets' },
+        { name: 'Investasi', icon: LineChart, href: '/laporan/investasi', permission: 'investmentReport' },
+      ]
+    },
+    {
+      name: 'Laporan Pajak',
+      icon: BadgePercent,
+      permission: 'reportTax',
+      items: [
+        { name: 'Pajak', icon: BadgePercent, href: '/pajak', permission: 'taxes' },
+      ]
+    },
+    {
+      name: 'Laporan Bank',
+      icon: Landmark,
+      permission: 'reportBank',
+      items: [
+        { name: 'Rekening Bank', icon: FileText, href: '/laporan/bank', permission: 'bankReport' },
+      ]
+    },
+  ]
+
+  // Filter visible items
+  const visibleSingleMenuItems = currentUser
+    ? singleMenuItems.filter((item) => hasModulePermission(currentUser, item.permission))
     : []
+
+  const visibleReportGroups = currentUser
+    ? reportMenuGroups
+        .map(group => ({
+          ...group,
+          items: group.items.filter(item => hasModulePermission(currentUser, item.permission))
+        }))
+        .filter(group => group.items.length > 0 && hasModulePermission(currentUser, group.permission))
+    : []
+
+  const hasAnyReportAccess = visibleReportGroups.length > 0
 
   const organizationAdminMenuItems = currentUser
     ? [
-        { name: 'Audit Trail', icon: Clock, href: '/audit-trail', permission: 'auditTrail' },
-        { name: 'Admin Organisasi', icon: Shield, href: '/admin', permission: 'organizationAdmin' },
-        { name: 'Pengaturan Organisasi', icon: Settings, href: '/pengaturan', permission: 'organizationSettings' },
+        { name: 'Audit Trail', icon: Clock, href: '/audit-trail', permission: 'auditTrail' as ModulePermission },
+        { name: 'Admin Organisasi', icon: Shield, href: '/admin', permission: 'organizationAdmin' as ModulePermission },
+        { name: 'Pengaturan Organisasi', icon: Settings, href: '/pengaturan', permission: 'organizationSettings' as ModulePermission },
       ].filter((item) => hasModulePermission(currentUser, item.permission))
     : []
+
   const platformAdminMenuItems = currentUser?.isPlatformAdmin
-    ? [{ name: 'Platform Admin', icon: Shield, href: '/platform-admin' }]
+    ? [
+        { name: 'Platform Admin', icon: Shield, href: '/platform-admin', permission: 'platformAdmin' as ModulePermission },
+        { name: 'Backup & Restore', icon: FileText, href: '/platform-admin/backup', permission: 'backupRestore' as ModulePermission },
+      ]
     : []
+
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups(prev => 
+      prev.includes(groupName) 
+        ? prev.filter(g => g !== groupName)
+        : [...prev, groupName]
+    )
+  }
+
+  const isInReportSection = pathname.startsWith('/laporan') || 
+    (pathname.startsWith('/sales') && visibleReportGroups.some(g => g.items.some(i => i.href === '/sales'))) ||
+    (pathname.startsWith('/inventory') && visibleReportGroups.some(g => g.items.some(i => i.href === '/inventory'))) ||
+    (pathname.startsWith('/pajak') && visibleReportGroups.some(g => g.items.some(i => i.href === '/pajak')))
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -79,14 +180,19 @@ export default function DashboardLayout({
 
       {/* SIDEBAR NAVIGATION */}
       <aside 
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white shadow-xl transform transition-transform duration-300 ease-in-out pointer-events-auto md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white shadow-xl transform transition-transform duration-300 ease-in-out pointer-events-auto md:relative md:translate-x-0 overflow-y-auto ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between h-16 px-6 bg-slate-950 border-b border-slate-800">
-          <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-white">
-            <Building2 className="text-blue-500" size={24} />
-            <span>OrgBook</span>
+        <div className="flex items-center justify-between h-12 px-6 bg-slate-950 border-b border-slate-800">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 font-bold text-lg tracking-tight text-white">
+              <Building2 className="text-blue-500" size={18} />
+              <span>OrgBook</span>
+            </div>
+            {currentUser?.organizationName && (
+              <span className="text-xs text-slate-400 mt-0.5">{currentUser.organizationName}</span>
+            )}
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-gray-400 hover:text-white">
             <X size={20} />
@@ -94,16 +200,17 @@ export default function DashboardLayout({
         </div>
 
         <nav className="p-4 space-y-1.5">
-          {visibleAppMenuItems.map((item) => {
+          {/* Single Menu Items */}
+          {visibleSingleMenuItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <Link 
                 key={item.name} 
                 href={item.href}
-                onClick={() => setIsSidebarOpen(false)} // Tutup sidebar di mobile jika diklik
+                onClick={() => setIsSidebarOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors font-medium pointer-events-auto ${
                   isActive 
-                    ? 'bg-blue-600 text-white shadow-md' // Menyala biru jika aktif
+                    ? 'bg-blue-600 text-white shadow-md'
                     : 'text-gray-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
@@ -112,6 +219,61 @@ export default function DashboardLayout({
               </Link>
             )
           })}
+
+          {/* Grouped Reports Menu */}
+          {hasAnyReportAccess && (
+            <div className="pt-2">
+              <button
+                onClick={() => toggleGroup('laporan')}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors font-medium pointer-events-auto ${
+                  isInReportSection
+                    ? 'bg-blue-600/20 text-blue-300'
+                    : 'text-gray-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <FileBarChart size={20} className={isInReportSection ? 'text-blue-300' : 'text-gray-400'} />
+                  <span>Laporan</span>
+                </div>
+                {expandedGroups.includes('laporan') ? (
+                  <ChevronDown size={16} />
+                ) : (
+                  <ChevronRight size={16} />
+                )}
+              </button>
+              
+              {expandedGroups.includes('laporan') && (
+                <div className="mt-1 ml-4 space-y-1 border-l-2 border-slate-700 pl-3">
+                  {visibleReportGroups.map((group) => (
+                    <div key={group.name} className="space-y-1">
+                      <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        <group.icon size={14} />
+                        <span>{group.name}</span>
+                      </div>
+                      {group.items.map((item) => {
+                        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+                        return (
+                          <Link
+                            key={item.name}
+                            href={item.href}
+                            onClick={() => setIsSidebarOpen(false)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                              isActive
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-400 hover:bg-slate-800 hover:text-white'
+                            }`}
+                          >
+                            <item.icon size={16} />
+                            <span>{item.name}</span>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {organizationAdminMenuItems.length > 0 && (
             <div className="pt-4">

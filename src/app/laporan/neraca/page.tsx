@@ -14,7 +14,7 @@ type BalanceSheetPageProps = {
 }
 
 export default async function NercaPage({ searchParams }: BalanceSheetPageProps) {
-  const { organization } = await requireModuleAccess("reports")
+  const { organization } = await requireModuleAccess("balanceSheet")
   const activeOrg = await prisma.organization.findUnique({
     where: { id: organization.id },
     include: {

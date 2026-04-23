@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { requireCurrentOrganization } from "@/lib/auth"
 import { hasModulePermission } from "@/lib/permissions"
+import { postInventoryMovementInTx } from "@/lib/inventory-ledger"
 
 type SalesOrderItemInput = {
   itemId: string
@@ -503,27 +504,14 @@ export async function createDeliveryOrderFromSalesOrder(data: {
         data: { deliveredQty: soItem.deliveredQty + qty },
       })
 
-      const itemTotalCost = qty * (soItem.item.unitCost || 0)
-      await tx.inventoryItem.update({
-        where: { id: soItem.itemId },
-        data: {
-          quantity: soItem.item.quantity - qty,
-          totalValue: Math.max(0, soItem.item.totalValue - itemTotalCost),
-        },
-      })
-
-      await tx.inventoryMovement.create({
-        data: {
-          organizationId: organization.id,
-          itemId: soItem.itemId,
-          movementType: "OUT",
-          quantity: qty,
-          unitCost: soItem.item.unitCost,
-          totalCost: itemTotalCost,
-          reference: created.code,
-          description: `Pengiriman dari Sales Order ${salesOrder.code}`,
-          performedBy: user.id,
-        },
+      await postInventoryMovementInTx(tx, {
+        organizationId: organization.id,
+        itemId: soItem.itemId,
+        movementType: "OUT",
+        quantity: qty,
+        reference: created.code,
+        description: `Pengiriman dari Sales Order ${salesOrder.code}`,
+        performedBy: user.id,
       })
     }
 

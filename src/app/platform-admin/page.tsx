@@ -1,13 +1,17 @@
 import Link from "next/link"
-import { Building2, CreditCard, Search, ShieldCheck } from "lucide-react"
+import { Building2, CreditCard, Search, ShieldCheck, Trash2, Key, Mail } from "lucide-react"
 import { requirePlatformAdmin } from "../../lib/auth"
 import {
   setPlatformOrganizationSubscriptionStatus,
   updatePlatformOrganizationExpiry,
+  deletePlatformOrganization,
+  resetPlatformOwnerPassword,
+  updatePlatformOwnerEmail,
 } from "../actions/platform-admin"
 import { prisma } from "../../lib/prisma"
 import PlatformClientProvisionForm from "../../components/platform-admin/PlatformClientProvisionForm"
 import PlatformOwnerAccessActions from "../../components/platform-admin/PlatformOwnerAccessActions"
+import DeleteOrganizationButton from "../../components/platform-admin/DeleteOrganizationButton"
 
 type PlatformAdminPageProps = {
   searchParams?: Promise<{
@@ -232,6 +236,8 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
                 <th className="px-4 py-3 font-bold">Akses Owner</th>
                 <th className="px-4 py-3 font-bold">Aksi Cepat</th>
                 <th className="px-4 py-3 font-bold">Set Expiry</th>
+                <th className="px-4 py-3 font-bold">Kelola Owner</th>
+                <th className="px-4 py-3 font-bold">Hapus</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -297,6 +303,43 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
                       </button>
                     </form>
                   </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <form action={resetPlatformOwnerPassword}>
+                        <input type="hidden" name="organizationId" value={organization.id} />
+                        <input type="hidden" name="newPassword" value="password123" />
+                        <button
+                          type="submit"
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                        >
+                          <Key size={12} className="inline mr-1" /> Reset
+                        </button>
+                      </form>
+                      <form action={updatePlatformOwnerEmail}>
+                        <input type="hidden" name="organizationId" value={organization.id} />
+                        <input
+                          type="email"
+                          name="newEmail"
+                          placeholder="Email baru"
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs w-full sm:w-auto"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                        >
+                          <Mail size={12} className="inline mr-1" /> Update
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <DeleteOrganizationButton
+                      organizationId={organization.id}
+                      organizationName={organization.name}
+                      onDelete={deletePlatformOrganization}
+                    />
+                  </td>
                       </>
                     )
                   })()}
@@ -304,7 +347,7 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
               ))}
               {filteredOrganizations.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                     Tidak ada organisasi yang cocok dengan pencarian ini.
                   </td>
                 </tr>

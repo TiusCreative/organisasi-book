@@ -147,18 +147,6 @@ export async function createAdminManagedUser(formData: FormData) {
     return { success: false, error: "Email user sudah digunakan." }
   }
 
-  const orgUserCount = await prisma.user.count({
-    where: { organizationId: admin.organizationId },
-  })
-  const organization = await prisma.organization.findUnique({
-    where: { id: admin.organizationId || "" },
-    select: { maxUsers: true },
-  })
-
-  if (organization && orgUserCount >= organization.maxUsers) {
-    return { success: false, error: "Batas user untuk paket tahunan saat ini sudah tercapai." }
-  }
-
   await prisma.user.create({
     data: {
       name,

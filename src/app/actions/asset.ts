@@ -29,6 +29,7 @@ const FIXED_ASSET_ACCOUNT_MAP: Record<string, { asset: string; accumulated: stri
   Peralatan: { asset: '1740', accumulated: '1741', expense: '5630' },
   Furniture: { asset: '1740', accumulated: '1741', expense: '5630' },
   Elektronik: { asset: '1740', accumulated: '1741', expense: '5630' },
+  'Aset Tak Berwujud': { asset: '1760', accumulated: '1761', expense: '5650' },
   Lainnya: { asset: '1750', accumulated: '1751', expense: '5640' },
 }
 

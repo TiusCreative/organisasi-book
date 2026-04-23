@@ -5,17 +5,41 @@ export const MODULE_PERMISSION_LABELS = {
   transactions: "Transaksi",
   bank: "Rekening Bank",
   investments: "Investasi",
-  reports: "Laporan",
-  accounts: "Daftar Akun",
+  reports: "Laporan (Umum)",
+  // Laporan Keuangan
+  reportFinancial: "Laporan Keuangan",
+  balanceSheet: "Laporan Neraca",
+  incomeStatement: "Laporan Laba Rugi",
+  cashFlow: "Laporan Arus Kas",
+  equityChange: "Laporan Perubahan Modal",
+  retainedEarnings: "Laporan Laba Ditahan",
+  reservesDistribution: "Laporan Cadangan & Distribusi",
+  generalLedger: "Buku Besar",
+  // Laporan Operasional
+  reportOperational: "Laporan Operasional",
+  arap: "AR/AP",
+  reportPurchase: "Laporan Purchase Order",
+  reportSales: "Laporan Sales & Marketing",
+  reportInventory: "Laporan Inventory & Gudang",
+  reportWorkOrder: "Laporan Work Order",
+  // Laporan Aset & Investasi
+  reportAssets: "Laporan Aset & Investasi",
   assets: "Aset",
   depreciation: "Penyusutan",
-  payroll: "Gaji",
+  intangibleAssets: "Aset Tak Berwujud",
+  investmentReport: "Laporan Investasi",
+  // Laporan Pajak
+  reportTax: "Laporan Pajak",
   taxes: "Pajak",
+  // Laporan Bank
+  reportBank: "Laporan Bank",
+  bankReport: "Laporan Rekening Bank",
+  // Master Data
+  accounts: "Daftar Akun",
   subscription: "Berlangganan",
   organizationAdmin: "Admin Organisasi",
   organizationSettings: "Pengaturan Organisasi",
   auditTrail: "Audit Trail",
-  arap: "AR/AP",
   workOrder: "Work Order",
   inventory: "Inventory",
   warehouse: "Gudang / Multi Warehouse",
@@ -29,6 +53,9 @@ export const MODULE_PERMISSION_LABELS = {
   invoice: "Invoice",
   commission: "Komisi Sales",
   budget: "Budgeting",
+  // Platform Admin
+  platformAdmin: "Platform Admin",
+  backupRestore: "Backup & Restore Database",
 } as const
 
 export type ModulePermission = keyof typeof MODULE_PERMISSION_LABELS
@@ -36,13 +63,18 @@ export type ModulePermission = keyof typeof MODULE_PERMISSION_LABELS
 export const ALL_MODULE_PERMISSIONS = Object.keys(MODULE_PERMISSION_LABELS) as ModulePermission[]
 
 const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, ModulePermission[]> = {
-  ADMIN: ALL_MODULE_PERMISSIONS,
+  ADMIN: ALL_MODULE_PERMISSIONS.filter(p => 
+    p !== "balanceSheet" && p !== "incomeStatement" && p !== "cashFlow"
+  ),
   MANAGER: [
     "dashboard",
     "transactions",
     "bank",
     "investments",
     "reports",
+    "balanceSheet",
+    "incomeStatement",
+    "cashFlow",
     "accounts",
     "assets",
     "depreciation",
@@ -101,7 +133,12 @@ export function getEffectiveModulePermissions(user: Pick<User, "role" | "isPlatf
   }
 
   const stored = normalizeModulePermissions(user.permissions || [])
-  return stored.length > 0 ? stored : DEFAULT_ROLE_PERMISSIONS[user.role]
+  // Use default permissions if stored is empty (empty array means use default)
+  if (stored.length === 0) {
+    return DEFAULT_ROLE_PERMISSIONS[user.role]
+  }
+  
+  return stored
 }
 
 export function hasModulePermission(

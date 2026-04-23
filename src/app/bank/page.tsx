@@ -1,5 +1,7 @@
 
 import { prisma } from "../../lib/prisma"
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import BankModal from "../../components/forms/BankModal"
 import BankClientComponent from "../../components/BankClientComponent"
 import { requireModuleAccess } from "../../lib/auth"
@@ -39,6 +41,12 @@ export default async function BankPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      <div className="mb-6">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+          <span>Kembali ke Dashboard</span>
+        </Link>
+      </div>
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Manajemen Kas & Bank</h1>
       </div>

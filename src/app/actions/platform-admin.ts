@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { Prisma } from "@prisma/client"
 import { prisma } from "../../lib/prisma"
 import { createPasswordHash, requirePlatformAdmin } from "../../lib/auth"
 import { logAudit } from "../../lib/audit-logger"
@@ -222,6 +223,226 @@ export async function updatePlatformOrganizationExpiry(formData: FormData) {
       subscriptionStatus: parsedDate.getTime() > Date.now() ? "ACTIVE" : "EXPIRED",
     },
     reason: "Platform admin mengubah expiry date subscription",
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function deletePlatformOrganization(formData: FormData) {
+  const admin = await requirePlatformAdmin()
+  const organizationId = String(formData.get("organizationId") || "")
+  const confirmName = String(formData.get("confirmName") || "").trim()
+
+  if (!organizationId || !confirmName) {
+    return { success: false, error: "Data tidak lengkap." }
+  }
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, name: true },
+  })
+
+  if (!organization) {
+    return { success: false, error: "Organisasi tidak ditemukan." }
+  }
+
+  if (organization.name.toLowerCase() !== confirmName.toLowerCase()) {
+    return { success: false, error: "Nama organisasi tidak cocok." }
+  }
+
+  const isSkippableSchemaError = (error: unknown) =>
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+
+  try {
+    // Run deletes sequentially by dependency order.
+    // Each query is isolated so a skippable schema error doesn't poison subsequent queries.
+    const deleteOps: Array<{ name: string; run: () => Promise<unknown> }> = [
+      { name: "transactionAttachment", run: () => prisma.transactionAttachment.deleteMany({ where: { transaction: { organizationId } } }) },
+      { name: "transactionLine", run: () => prisma.transactionLine.deleteMany({ where: { transaction: { organizationId } } }) },
+      { name: "taxEntry", run: () => prisma.taxEntry.deleteMany({ where: { organizationId } }) },
+      { name: "allowance", run: () => prisma.allowance.deleteMany({ where: { employee: { organizationId } } }) },
+      { name: "deduction", run: () => prisma.deduction.deleteMany({ where: { employee: { organizationId } } }) },
+      { name: "salarySlip", run: () => prisma.salarySlip.deleteMany({ where: { organizationId } }) },
+      { name: "budgetActual", run: () => prisma.budgetActual.deleteMany({ where: { budget: { organizationId } } }) },
+      { name: "budgetItem", run: () => prisma.budgetItem.deleteMany({ where: { budget: { organizationId } } }) },
+      { name: "recurringTransactionLine", run: () => prisma.recurringTransactionLine.deleteMany({ where: { recurringTransaction: { organizationId } } }) },
+      { name: "deliveryOrderItem", run: () => prisma.deliveryOrderItem.deleteMany({ where: { deliveryOrder: { organizationId } } }) },
+      { name: "salesCommission", run: () => prisma.salesCommission.deleteMany({ where: { organizationId } }) },
+      { name: "deliveryOrder", run: () => prisma.deliveryOrder.deleteMany({ where: { organizationId } }) },
+      { name: "salesOrderItem", run: () => prisma.salesOrderItem.deleteMany({ where: { salesOrder: { organizationId } } }) },
+      { name: "salesOrder", run: () => prisma.salesOrder.deleteMany({ where: { organizationId } }) },
+      { name: "stockOpnameItem", run: () => prisma.stockOpnameItem.deleteMany({ where: { stockOpname: { organizationId } } }) },
+      { name: "stockOpname", run: () => prisma.stockOpname.deleteMany({ where: { organizationId } }) },
+      { name: "inventoryMovement", run: () => prisma.inventoryMovement.deleteMany({ where: { organizationId } }) },
+      { name: "inventoryItem", run: () => prisma.inventoryItem.deleteMany({ where: { organizationId } }) },
+      { name: "workOrderItem", run: () => prisma.workOrderItem.deleteMany({ where: { workOrder: { organizationId } } }) },
+      { name: "workOrder", run: () => prisma.workOrder.deleteMany({ where: { organizationId } }) },
+      { name: "pettyCashTransaction", run: () => prisma.pettyCashTransaction.deleteMany({ where: { pettyCash: { organizationId } } }) },
+      { name: "pettyCash", run: () => prisma.pettyCash.deleteMany({ where: { organizationId } }) },
+      { name: "bankReconciliationItem", run: () => prisma.bankReconciliationItem.deleteMany({ where: { reconciliation: { organizationId } } }) },
+      { name: "bankReconciliation", run: () => prisma.bankReconciliation.deleteMany({ where: { organizationId } }) },
+      { name: "purchaseOrderItem", run: () => prisma.purchaseOrderItem.deleteMany({ where: { purchaseOrder: { organizationId } } }) },
+      { name: "purchaseOrder", run: () => prisma.purchaseOrder.deleteMany({ where: { organizationId } }) },
+      { name: "invoicePayment", run: () => prisma.invoicePayment.deleteMany({ where: { organizationId } }) },
+      { name: "invoiceItem", run: () => prisma.invoiceItem.deleteMany({ where: { invoice: { organizationId } } }) },
+      { name: "invoice", run: () => prisma.invoice.deleteMany({ where: { organizationId } }) },
+      { name: "vendorBillPayment", run: () => prisma.vendorBillPayment.deleteMany({ where: { organizationId } }) },
+      { name: "vendorBillItem", run: () => prisma.vendorBillItem.deleteMany({ where: { vendorBill: { organizationId } } }) },
+      { name: "vendorBill", run: () => prisma.vendorBill.deleteMany({ where: { organizationId } }) },
+      { name: "customer", run: () => prisma.customer.deleteMany({ where: { organizationId } }) },
+      { name: "supplier", run: () => prisma.supplier.deleteMany({ where: { organizationId } }) },
+      { name: "exchangeRate", run: () => prisma.exchangeRate.deleteMany({ where: { organizationId } }) },
+      { name: "currency", run: () => prisma.currency.deleteMany({ where: { organizationId } }) },
+      { name: "budget", run: () => prisma.budget.deleteMany({ where: { organizationId } }) },
+      { name: "branch", run: () => prisma.branch.deleteMany({ where: { organizationId } }) },
+      { name: "warehouse", run: () => prisma.warehouse.deleteMany({ where: { organizationId } }) },
+      { name: "division-parent-nullify", run: () => prisma.division.updateMany({ where: { organizationId }, data: { parentId: null } }) },
+      { name: "division", run: () => prisma.division.deleteMany({ where: { organizationId } }) },
+      { name: "investment", run: () => prisma.investment.deleteMany({ where: { organizationId } }) },
+      { name: "transaction", run: () => prisma.transaction.deleteMany({ where: { organizationId } }) },
+      { name: "recurringTransaction", run: () => prisma.recurringTransaction.deleteMany({ where: { organizationId } }) },
+      { name: "employee", run: () => prisma.employee.deleteMany({ where: { organizationId } }) },
+      { name: "subscriptionPayment", run: () => prisma.subscriptionPayment.deleteMany({ where: { organizationId } }) },
+      { name: "periodLock", run: () => prisma.periodLock.deleteMany({ where: { organizationId } }) },
+      { name: "noteSequence", run: () => prisma.noteSequence.deleteMany({ where: { organizationId } }) },
+      { name: "auditLog", run: () => prisma.auditLog.deleteMany({ where: { organizationId } }) },
+      { name: "user", run: () => prisma.user.deleteMany({ where: { organizationId } }) },
+      { name: "bankAccount", run: () => prisma.bankAccount.deleteMany({ where: { organizationId } }) },
+      { name: "chartOfAccount", run: () => prisma.chartOfAccount.deleteMany({ where: { organizationId } }) },
+      { name: "accountCategory", run: () => prisma.accountCategory.deleteMany({ where: { organizationId } }) },
+      { name: "organization", run: () => prisma.organization.delete({ where: { id: organizationId } }) },
+    ]
+
+    for (const op of deleteOps) {
+      try {
+        await op.run()
+      } catch (error) {
+        if (isSkippableSchemaError(error)) {
+          console.warn(`[platform-admin] Skip ${op.name} delete due to schema mismatch`, error)
+          continue
+        }
+        throw error
+      }
+    }
+  } catch (error) {
+    console.error("[platform-admin] Failed to delete organization", { organizationId, error })
+    return { success: false, error: "Gagal menghapus organisasi. Cek data relasi organisasi dan coba lagi." }
+  }
+
+  await logAudit({
+    organizationId: null,
+    action: "DELETE",
+    entity: "Organization",
+    entityId: organizationId,
+    userId: admin.id,
+    userName: admin.name,
+    userEmail: admin.email,
+    oldData: { organizationName: organization.name, deletedOrganizationId: organizationId },
+    reason: "Platform admin menghapus organisasi",
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function resetPlatformOwnerPassword(formData: FormData) {
+  const admin = await requirePlatformAdmin()
+  const organizationId = String(formData.get("organizationId") || "")
+  const newPassword = String(formData.get("newPassword") || "")
+
+  if (!organizationId || !newPassword) {
+    return { success: false, error: "Data tidak lengkap." }
+  }
+
+  if (newPassword.length < 8) {
+    return { success: false, error: "Password minimal 8 karakter." }
+  }
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    include: {
+      users: {
+        where: { role: "ADMIN" },
+        select: { id: true, name: true, email: true },
+      },
+    },
+  })
+
+  if (!organization || !organization.users[0]) {
+    return { success: false, error: "Owner tidak ditemukan." }
+  }
+
+  await prisma.user.update({
+    where: { id: organization.users[0].id },
+    data: {
+      password: await createPasswordHash(newPassword),
+      passwordSetAt: new Date(),
+      status: "ACTIVE",
+    },
+  })
+
+  await logAudit({
+    organizationId,
+    action: "UPDATE",
+    entity: "User",
+    entityId: organization.users[0].id,
+    userId: admin.id,
+    userName: admin.name,
+    userEmail: admin.email,
+    newData: { ownerName: organization.users[0].name, ownerEmail: organization.users[0].email },
+    reason: "Platform admin mereset password owner",
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function updatePlatformOwnerEmail(formData: FormData) {
+  const admin = await requirePlatformAdmin()
+  const organizationId = String(formData.get("organizationId") || "")
+  const newEmail = String(formData.get("newEmail") || "").trim().toLowerCase()
+
+  if (!organizationId || !newEmail) {
+    return { success: false, error: "Data tidak lengkap." }
+  }
+
+  const existingUser = await prisma.user.findUnique({ where: { email: newEmail } })
+  if (existingUser) {
+    return { success: false, error: "Email sudah digunakan." }
+  }
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    include: {
+      users: {
+        where: { role: "ADMIN" },
+        select: { id: true, name: true, email: true },
+      },
+    },
+  })
+
+  if (!organization || !organization.users[0]) {
+    return { success: false, error: "Owner tidak ditemukan." }
+  }
+
+  await prisma.user.update({
+    where: { id: organization.users[0].id },
+    data: { email: newEmail },
+  })
+
+  await logAudit({
+    organizationId,
+    action: "UPDATE",
+    entity: "User",
+    entityId: organization.users[0].id,
+    userId: admin.id,
+    userName: admin.name,
+    userEmail: admin.email,
+    oldData: { oldEmail: organization.users[0].email },
+    newData: { newEmail },
+    reason: "Platform admin mengubah email owner",
   })
 
   revalidatePath("/platform-admin")

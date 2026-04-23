@@ -1,8 +1,23 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { ensureWorkOrderHppSchema } from "@/lib/work-order-schema"
+import { ensureInventorySecuritySchema } from "@/lib/inventory-security-schema"
+import { ensureOutboxSchema } from "@/lib/outbox-schema"
+import { ensureWarehouseReadModelSchema } from "@/lib/warehouse-read-model"
+import { ensureWarehouseEnterpriseSchema } from "@/lib/warehouse-enterprise-schema"
+import { ensureStockBalanceSchema } from "@/lib/stock-balance-schema"
 
 export async function POST() {
   try {
+    await Promise.all([
+      ensureWorkOrderHppSchema(),
+      ensureInventorySecuritySchema(),
+      ensureOutboxSchema(),
+      ensureWarehouseReadModelSchema(),
+      ensureWarehouseEnterpriseSchema(),
+      ensureStockBalanceSchema(),
+    ])
+
     const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
       SELECT tablename FROM pg_tables WHERE schemaname = 'public'
     `
@@ -17,13 +32,13 @@ export async function POST() {
       // Add isBase column if missing
       try {
         await prisma.$executeRawUnsafe(`ALTER TABLE "Currency" ADD COLUMN "isBase" BOOLEAN NOT NULL DEFAULT false`)
-      } catch (e) {
+      } catch {
         // Column may already exist
       }
       // Add isActive column if missing
       try {
         await prisma.$executeRawUnsafe(`ALTER TABLE "Currency" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true`)
-      } catch (e) {
+      } catch {
         // Column may already exist
       }
     }
@@ -58,26 +73,26 @@ export async function POST() {
       for (const col of columnsToAdd) {
         try {
           await prisma.$executeRawUnsafe(`ALTER TABLE "PettyCash" ADD COLUMN "${col.name}" ${col.type}`)
-        } catch (e) {
+        } catch {
           // Column may already exist
         }
       }
       // Add foreign key constraint for currencyId
       try {
         await prisma.$executeRawUnsafe(`ALTER TABLE "PettyCash" ADD CONSTRAINT "PettyCash_currencyId_fkey" FOREIGN KEY ("currencyId") REFERENCES "Currency"("id") ON DELETE CASCADE ON UPDATE CASCADE`)
-      } catch (e) {
+      } catch {
         // Constraint may already exist
       }
       // Add foreign key constraint for custodianId
       try {
         await prisma.$executeRawUnsafe(`ALTER TABLE "PettyCash" ADD CONSTRAINT "PettyCash_custodianId_fkey" FOREIGN KEY ("custodianId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE`)
-      } catch (e) {
+      } catch {
         // Constraint may already exist
       }
       // Copy fundName to name if name is null
       try {
         await prisma.$executeRawUnsafe(`UPDATE "PettyCash" SET "name" = "fundName" WHERE "name" IS NULL AND "fundName" IS NOT NULL`)
-      } catch (e) {
+      } catch {
         // Ignore error
       }
     }
@@ -146,7 +161,7 @@ export async function POST() {
       for (const col of customerColumns) {
         try {
           await prisma.$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN "${col.name}" ${col.type}`)
-        } catch (e) {
+        } catch {
           // Column may already exist
         }
       }
@@ -164,7 +179,7 @@ export async function POST() {
       for (const col of supplierColumns) {
         try {
           await prisma.$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN "${col.name}" ${col.type}`)
-        } catch (e) {
+        } catch {
           // Column may already exist
         }
       }
@@ -195,19 +210,19 @@ export async function POST() {
       for (const col of inventoryItemColumns) {
         try {
           await prisma.$executeRawUnsafe(`ALTER TABLE "InventoryItem" ADD COLUMN "${col.name}" ${col.type}`)
-        } catch (e) {
+        } catch {
           // Column may already exist
         }
       }
       // Create index for shelf location
       try {
         await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "InventoryItem_shelf_row_level_idx" ON "InventoryItem"("shelf", "row", "level")`
-      } catch (e) {
+      } catch {
         // Index may already exist
       }
       try {
         await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "InventoryItem_itemType_idx" ON "InventoryItem"("itemType")`
-      } catch (e) {
+      } catch {
         // Index may already exist
       }
     }
@@ -223,25 +238,25 @@ export async function POST() {
       for (const col of stockOpnameColumns) {
         try {
           await prisma.$executeRawUnsafe(`ALTER TABLE "StockOpname" ADD COLUMN "${col.name}" ${col.type}`)
-        } catch (e) {
+        } catch {
           // Column may already exist
         }
       }
       // Add foreign key constraint for approvedBy
       try {
         await prisma.$executeRawUnsafe(`ALTER TABLE "StockOpname" ADD CONSTRAINT "StockOpname_approvedBy_fkey" FOREIGN KEY ("approvedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE`)
-      } catch (e) {
+      } catch {
         // Constraint may already exist
       }
       // Create indexes
       try {
         await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "StockOpname_performedBy_idx" ON "StockOpname"("performedBy")`
-      } catch (e) {
+      } catch {
         // Index may already exist
       }
       try {
         await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "StockOpname_approvedBy_idx" ON "StockOpname"("approvedBy")`
-      } catch (e) {
+      } catch {
         // Index may already exist
       }
     }
@@ -287,12 +302,12 @@ export async function POST() {
     // Add currencyId column to BankAccount if missing (always run this first)
     try {
       await prisma.$executeRawUnsafe(`ALTER TABLE "BankAccount" ADD COLUMN "currencyId" TEXT`)
-    } catch (e) {
+    } catch {
       // Column may already exist
     }
     try {
       await prisma.$executeRawUnsafe(`ALTER TABLE "BankAccount" ADD CONSTRAINT "BankAccount_currencyId_fkey" FOREIGN KEY ("currencyId") REFERENCES "Currency"("id") ON DELETE SET NULL ON UPDATE CASCADE`)
-    } catch (e) {
+    } catch {
       // Constraint may already exist
     }
 
@@ -300,6 +315,8 @@ export async function POST() {
     const missingTables = requiredTables.filter(t => !tableNames.includes(t))
 
     if (missingTables.length === 0) {
+      await ensureWorkOrderHppSchema()
+      await ensureInventorySecuritySchema()
       return NextResponse.json({ success: true, message: "Migration completed successfully" })
     }
 
@@ -354,6 +371,8 @@ export async function POST() {
       await prisma.$executeRaw`CREATE INDEX "StockOpnameItem_itemId_idx" ON "StockOpnameItem"("itemId")`
     }
 
+    await ensureWorkOrderHppSchema()
+    await ensureInventorySecuritySchema()
     return NextResponse.json({ success: true, message: "Migration completed successfully" })
   } catch (error) {
     console.error("Migration error:", error)

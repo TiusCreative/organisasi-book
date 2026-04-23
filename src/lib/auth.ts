@@ -178,7 +178,7 @@ export async function setSessionCookie(token: string) {
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
@@ -250,6 +250,26 @@ export async function requireModuleAccess(
   const context = await requireCurrentOrganization(options)
   if (!hasModulePermission(context.user, permission)) {
     redirect("/dashboard")
+  }
+  return context
+}
+
+export function isReadOnlyRole(role: string) {
+  return role === "VIEWER"
+}
+
+export async function requireWritableCurrentOrganization(options?: { allowExpired?: boolean }) {
+  const context = await requireCurrentOrganization(options)
+  if (isReadOnlyRole(context.user.role)) {
+    throw new Error("Akun ini hanya read-only.")
+  }
+  return context
+}
+
+export async function requireWritableModuleAccess(permission: ModulePermission, options?: { allowExpired?: boolean }) {
+  const context = await requireModuleAccess(permission, options)
+  if (isReadOnlyRole(context.user.role)) {
+    throw new Error("Akun ini hanya read-only.")
   }
   return context
 }

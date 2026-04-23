@@ -149,6 +149,8 @@ const DEFAULT_INDONESIA_ACCOUNTS = [
   { code: '1741', name: 'Akumulasi Penyusutan Furniture', type: 'Asset', category: 'Aset Tetap' },
   { code: '1750', name: 'Aset Tetap Lainnya', type: 'Asset', category: 'Aset Tetap' },
   { code: '1751', name: 'Akumulasi Penyusutan Aset Lainnya', type: 'Asset', category: 'Aset Tetap' },
+  { code: '1760', name: 'Aset Tak Berwujud', type: 'Asset', category: 'Aset Tak Berwujud' },
+  { code: '1761', name: 'Akumulasi Amortisasi Aset Tak Berwujud', type: 'Asset', category: 'Aset Tak Berwujud' },
 
   // LIABILITY (2000-2999)
   { code: '2000', name: 'Hutang Usaha', type: 'Liability', category: 'Hutang' },
@@ -228,6 +230,7 @@ const DEFAULT_INDONESIA_ACCOUNTS = [
   { code: '5620', name: 'Beban Penyusutan Mesin', type: 'Expense', category: 'Penyusutan' },
   { code: '5630', name: 'Beban Penyusutan Furniture', type: 'Expense', category: 'Penyusutan' },
   { code: '5640', name: 'Beban Penyusutan Lainnya', type: 'Expense', category: 'Penyusutan' },
+  { code: '5650', name: 'Beban Amortisasi Aset Tak Berwujud', type: 'Expense', category: 'Penyusutan' },
   
   { code: '5700', name: 'Beban Pajak Penghasilan', type: 'Expense', category: 'Pajak' },
   { code: '5710', name: 'Beban Pajak Lainnya', type: 'Expense', category: 'Pajak' },
@@ -257,6 +260,7 @@ export async function initializeDefaultAccounts(organizationId: string) {
       'Persediaan',
       'Aset Lancar Lain',
       'Aset Tetap',
+      'Aset Tak Berwujud',
       'Hutang',
       'Hutang Pajak',
       'Hutang Karyawan',
@@ -338,6 +342,7 @@ function getColorForCategory(category: string): string {
     'Persediaan': '#0EA5E9',
     'Aset Lancar Lain': '#60A5FA',
     'Aset Tetap': '#1D4ED8',
+    'Aset Tak Berwujud': '#7C3AED',
     'Hutang': '#DC2626',
     'Hutang Pajak': '#EF4444',
     'Hutang Karyawan': '#F87171',

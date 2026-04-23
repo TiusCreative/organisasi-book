@@ -1,4 +1,5 @@
-import { Users, FileText, Receipt } from "lucide-react"
+import { Users, FileText, Receipt, ArrowLeft } from "lucide-react"
+import Link from "next/link"
 import { requireCurrentOrganization, requireModuleAccess } from "../../lib/auth"
 import CustomerSupplierManager from "../../components/arap/CustomerSupplierManager"
 import InvoiceManager from "../../components/arap/InvoiceManager"
@@ -19,6 +20,12 @@ export default async function ARAPPage() {
 
   return (
     <div className="max-w-full lg:max-w-7xl mx-auto px-4 sm:px-0 space-y-6">
+      <div className="mb-6">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+          <span>Kembali ke Dashboard</span>
+        </Link>
+      </div>
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">AR/AP</h1>
         <p className="text-slate-500 text-sm mt-1">Kelola Account Receivable dan Account Payable</p>

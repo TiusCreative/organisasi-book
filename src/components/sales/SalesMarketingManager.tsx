@@ -1,6 +1,8 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import {
   createDeliveryOrderFromSalesOrder,
   createInvoiceFromSalesOrder,
@@ -288,6 +290,12 @@ export default function SalesMarketingManager({ initialData, initialReport }: { 
 
   return (
     <div className="space-y-5">
+      <div className="mb-6">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+          <span>Kembali ke Dashboard</span>
+        </Link>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
         <div className="flex flex-wrap gap-2">
           {[
