@@ -2,25 +2,29 @@
 
 import { useState, useTransition } from "react"
 import { createPlatformClientTenant } from "../../app/actions/platform-admin"
+type PackageOption = { code: string; name: string }
 
-const defaultState = {
-  ownerName: "",
-  organizationName: "",
-  email: "",
-  password: "",
-  type: "PERUSAHAAN",
-  plan: "ANNUAL",
-  years: "1",
-  subscriptionStatus: "ACTIVE",
-  address: "",
-  city: "",
-  province: "",
-  postalCode: "",
-  phone: "",
+function buildDefaultState(packages: PackageOption[]) {
+  const initialPlan = packages.find((pkg) => pkg.code === "ANNUAL")?.code || packages[0]?.code || "ANNUAL"
+  return {
+    ownerName: "",
+    organizationName: "",
+    email: "",
+    password: "",
+    type: "PERUSAHAAN",
+    plan: initialPlan,
+    years: "1",
+    subscriptionStatus: "ACTIVE",
+    address: "",
+    city: "",
+    province: "",
+    postalCode: "",
+    phone: "",
+  }
 }
 
-export default function PlatformClientProvisionForm() {
-  const [form, setForm] = useState(defaultState)
+export default function PlatformClientProvisionForm({ packages }: { packages: PackageOption[] }) {
+  const [form, setForm] = useState(() => buildDefaultState(packages))
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
   const [isPending, startTransition] = useTransition()
@@ -41,7 +45,7 @@ export default function PlatformClientProvisionForm() {
       }
 
       setMessage("Owner dan organisasi client berhasil dibuat.")
-      setForm(defaultState)
+      setForm(buildDefaultState(packages))
       window.location.reload()
     })
   }
@@ -128,11 +132,15 @@ export default function PlatformClientProvisionForm() {
               onChange={(event) => setForm((current) => ({ ...current, plan: event.target.value }))}
               className="w-full rounded-xl border border-slate-200 px-4 py-3"
             >
-              <option value="ANNUAL">Tahunan</option>
+              {packages.map((pkg) => (
+                <option key={pkg.code} value={pkg.code}>
+                  {pkg.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-bold text-slate-700">Masa Aktif</label>
+            <label className="mb-1 block text-sm font-bold text-slate-700">Qty</label>
             <input
               type="number"
               min="1"

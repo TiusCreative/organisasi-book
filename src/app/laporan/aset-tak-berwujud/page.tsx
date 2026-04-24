@@ -1,6 +1,7 @@
 import { requireCurrentOrganization, requireModuleAccess } from "@/lib/auth"
 import { FileText } from "lucide-react"
 import IntangibleAssetsReport from "@/components/reports/IntangibleAssetsReport"
+import ReportActionButtons from "@/components/reports/ReportActionButtons"
 
 export default async function AsetTakBerwujudPage() {
   await requireModuleAccess("reports")
@@ -22,7 +23,16 @@ export default async function AsetTakBerwujudPage() {
         <p className="text-slate-500 text-sm mt-1">{activeOrg.name}</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <ReportActionButtons
+        pdfUrl={`/api/${activeOrg.id}/reports/aset-tak-berwujud/pdf`}
+        whatsappText={[
+          "Laporan Aset Tak Berwujud",
+          `Nama Organisasi: ${activeOrg.name}`,
+        ].join("\n")}
+        printTargetId="report-content"
+      />
+
+      <div id="report-content" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3 flex-col sm:flex-row">
           <FileText size={24} className="text-purple-600" />
           <div>
@@ -35,4 +45,3 @@ export default async function AsetTakBerwujudPage() {
     </div>
   )
 }
-

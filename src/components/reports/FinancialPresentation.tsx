@@ -43,144 +43,7 @@ export default function FinancialPresentation(props: { initialStartDate?: string
     setLoading(true)
     setError("")
     try {
-      // TODO: Fetch from actual API when implemented
-      // For now, showing demo data
-      const demoData: FinancialPresentationData = {
-        balanceSheet: {
-          name: "Laporan Posisi Keuangan (Neraca)",
-          items: [
-            {
-              category: "Aset",
-              lineItems: [
-                { name: "Aset Lancar", amount: 0, isSubtotal: true },
-                { name: "Kas dan Setara Kas", amount: 5000000000 },
-                { name: "Piutang Usaha", amount: 3000000000 },
-                { name: "Persediaan", amount: 2000000000 },
-                { name: "Total Aset Lancar", amount: 10000000000, isTotal: true },
-                { name: "Aset Tidak Lancar", amount: 0, isSubtotal: true },
-                { name: "Aset Tetap", amount: 8000000000 },
-                { name: "Aset Tak Berwujud", amount: 2000000000 },
-                { name: "Total Aset Tidak Lancar", amount: 10000000000, isTotal: true },
-                { name: "TOTAL ASET", amount: 20000000000, isTotal: true },
-              ]
-            },
-            {
-              category: "Liabilitas",
-              lineItems: [
-                { name: "Liabilitas Jangka Pendek", amount: 0, isSubtotal: true },
-                { name: "Utang Usaha", amount: 4000000000 },
-                { name: "Utang Pajak", amount: 1000000000 },
-                { name: "Total Liabilitas Jangka Pendek", amount: 5000000000, isTotal: true },
-                { name: "Liabilitas Jangka Panjang", amount: 0, isSubtotal: true },
-                { name: "Utang Bank", amount: 3000000000 },
-                { name: "Total Liabilitas Jangka Panjang", amount: 3000000000, isTotal: true },
-                { name: "TOTAL LIABILITAS", amount: 8000000000, isTotal: true },
-              ]
-            },
-            {
-              category: "Ekuitas",
-              lineItems: [
-                { name: "Modal Saham", amount: 5000000000 },
-                { name: "Tambahan Modal Disetor", amount: 1000000000 },
-                { name: "Saldo Laba", amount: 6000000000 },
-                { name: "TOTAL EKUITAS", amount: 12000000000, isTotal: true },
-                { name: "TOTAL LIABILITAS DAN EKUITAS", amount: 20000000000, isTotal: true },
-              ]
-            }
-          ]
-        },
-        incomeStatement: {
-          name: "Laporan Laba Rugi dan Penghasilan Komprehensif Lain",
-          items: [
-            {
-              category: "Pendapatan",
-              lineItems: [
-                { name: "Pendapatan Usaha", amount: 25000000000 },
-                { name: "Pendapatan Lain-lain", amount: 2000000000 },
-                { name: "TOTAL PENDAPATAN", amount: 27000000000, isTotal: true },
-              ]
-            },
-            {
-              category: "Beban",
-              lineItems: [
-                { name: "Beban Pokok Penjualan", amount: 15000000000 },
-                { name: "Beban Operasional", amount: 5000000000 },
-                { name: "Beban Penjualan", amount: 2000000000 },
-                { name: "Beban Administrasi & Umum", amount: 3000000000 },
-                { name: "Beban Pajak", amount: 1200000000 },
-                { name: "TOTAL BEBAN", amount: 26200000000, isTotal: true },
-              ]
-            },
-            {
-              category: "Laba/Rugi",
-              lineItems: [
-                { name: "LABA/RUGI BERSIH", amount: 800000000, isTotal: true },
-              ]
-            }
-          ]
-        },
-        cashFlowStatement: {
-          name: "Laporan Arus Kas",
-          items: [
-            {
-              category: "Arus Kas dari Aktivitas Operasi",
-              lineItems: [
-                { name: "Penerimaan dari Pelanggan", amount: 26000000000 },
-                { name: "Pembayaran kepada Pemasok", amount: 18000000000 },
-                { name: "Pembayaran kepada Karyawan", amount: 4000000000 },
-                { name: "Pembayaran Pajak", amount: 1200000000 },
-                { name: "Arus Kas Bersih dari Aktivitas Operasi", amount: 2800000000, isTotal: true },
-              ]
-            },
-            {
-              category: "Arus Kas dari Aktivitas Investasi",
-              lineItems: [
-                { name: "Pembelian Aset Tetap", amount: -2000000000 },
-                { name: "Penjualan Aset", amount: 500000000 },
-                { name: "Arus Kas Bersih dari Aktivitas Investasi", amount: -1500000000, isTotal: true },
-              ]
-            },
-            {
-              category: "Arus Kas dari Aktivitas Pendanaan",
-              lineItems: [
-                { name: "Penerbitan Saham", amount: 1000000000 },
-                { name: "Pembayaran Dividen", amount: -300000000 },
-                { name: "Arus Kas Bersih dari Aktivitas Pendanaan", amount: 700000000, isTotal: true },
-              ]
-            },
-            {
-              category: "Total",
-              lineItems: [
-                { name: "KENAIKAN/PENURUNAN KAS BERSIH", amount: 2000000000, isTotal: true },
-              ]
-            }
-          ]
-        },
-        equityChanges: {
-          name: "Laporan Perubahan Ekuitas",
-          items: [
-            {
-              category: "Perubahan Ekuitas",
-              lineItems: [
-                { name: "Saldo Awal Ekuitas", amount: 11200000000 },
-                { name: "Laba Tahun Berjalan", amount: 800000000 },
-                { name: "Penerbitan Saham Baru", amount: 1000000000 },
-                { name: "Pembayaran Dividen", amount: -300000000 },
-                { name: "Saldo Akhir Ekuitas", amount: 12700000000, isTotal: true },
-              ]
-            }
-          ]
-        },
-        notes: [
-          "Dasar penyusunan laporan keuangan menggunakan basis akrual sesuai PSAK 1.",
-          "Kebijakan akuntansi mengikuti Standar Akuntansi Keuangan Indonesia (SAK).",
-          "Aset tetap dicatat sebesar biaya perolehan dan disusutkan menggunakan metode garis lurus.",
-          "Persediaan dinilai dengan metode biaya rata-rata tertimbang.",
-          "Piutang usaha dinilai sebesar nilai realisasi bersih setelah pengurangan cadangan kerugian.",
-        ]
-      }
-
-      setData(demoData)
+      setData(null)
     } catch (e) {
       setData(null)
       setError(e instanceof Error ? e.message : "Gagal memuat laporan")
@@ -284,7 +147,7 @@ export default function FinancialPresentation(props: { initialStartDate?: string
         </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-          <p className="text-sm text-amber-900">Belum ada data laporan keuangan untuk periode ini.</p>
+          <p className="text-sm text-amber-900">Tidak ada data presentasi laporan keuangan untuk periode ini.</p>
         </div>
       )}
     </div>

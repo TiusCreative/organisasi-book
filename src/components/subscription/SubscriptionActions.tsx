@@ -3,7 +3,13 @@
 import { useState, useTransition } from "react"
 import Script from "next/script"
 import { useRouter } from "next/navigation"
-import { createMidtransAnnualPayment, extendSubscriptionManually } from "../../app/actions/subscription"
+import { createMidtransSubscriptionPayment, extendSubscriptionManually } from "../../app/actions/subscription"
+
+type PackageOption = {
+  code: string
+  name: string
+  amountIdr: number | null
+}
 
 declare global {
   interface Window {
@@ -25,10 +31,12 @@ export default function SubscriptionActions({
   midtransReady,
   midtransClientKey,
   midtransScriptUrl,
+  packages,
 }: {
   midtransReady: boolean
   midtransClientKey: string
   midtransScriptUrl: string
+  packages: PackageOption[]
 }) {
   const router = useRouter()
   const [error, setError] = useState("")
@@ -37,12 +45,12 @@ export default function SubscriptionActions({
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const handleMidtrans = () => {
+  const handleMidtrans = (packageCode: string) => {
     setError("")
     setInfo("")
 
     startTransition(async () => {
-      const result = await createMidtransAnnualPayment()
+      const result = await createMidtransSubscriptionPayment(packageCode)
       if (!result.success) {
         setError(result.error || "Gagal membuat transaksi Midtrans.")
         return
@@ -119,16 +127,26 @@ export default function SubscriptionActions({
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="text-lg font-bold text-slate-800">Midtrans</h2>
         <p className="mt-2 text-sm text-slate-500">
-          Bayar langganan tahunan secara otomatis melalui Midtrans.
+          Pilih paket berlangganan dan bayar secara otomatis melalui Midtrans.
         </p>
-        <button
-          type="button"
-          disabled={!midtransReady || !scriptLoaded || isPending}
-          onClick={handleMidtrans}
-          className="mt-4 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isPending ? "Memproses..." : "Bayar dengan Midtrans"}
-        </button>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {packages.map((pkg) => (
+            <button
+              key={pkg.code}
+              type="button"
+              disabled={!midtransReady || !scriptLoaded || isPending || (pkg.code === "UNLIMITED" && !pkg.amountIdr)}
+              onClick={() => handleMidtrans(pkg.code)}
+              className="rounded-xl bg-slate-900 px-5 py-3 text-left text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <div>{pkg.name}</div>
+              <div className="mt-1 text-xs font-medium text-white/80">
+                {pkg.code === "UNLIMITED" && !pkg.amountIdr
+                  ? "Harga UNLIMITED belum diatur"
+                  : "Bayar via Midtrans"}
+              </div>
+            </button>
+          ))}
+        </div>
         {midtransReady && !scriptLoaded && (
           <p className="mt-3 text-xs text-slate-500">
             Memuat Snap.js dari Midtrans...

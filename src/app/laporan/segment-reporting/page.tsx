@@ -1,7 +1,8 @@
 import { requireCurrentOrganization, requireModuleAccess } from "@/lib/auth"
 import { PieChart } from "lucide-react"
-import { resolveDateRange, formatInputDate } from "@/lib/date-range"
+import { resolveDateRange, formatInputDate, formatDateRange } from "@/lib/date-range"
 import SegmentReporting from "@/components/reports/SegmentReporting"
+import ReportActionButtons from "@/components/reports/ReportActionButtons"
 
 type PageProps = {
   searchParams?: Promise<{
@@ -16,6 +17,12 @@ export default async function SegmentReportingPage({ searchParams }: PageProps) 
 
   const params = searchParams ? await searchParams : {}
   const { startDate, endDate } = resolveDateRange(params)
+  const pdfUrl = `/api/${activeOrg.id}/reports/segment-reporting/pdf?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`
+  const whatsappText = [
+    "Segment Reporting (PSAK 7)",
+    `Nama Organisasi: ${activeOrg.name}`,
+    `Periode: ${formatDateRange(startDate, endDate)}`,
+  ].join("\n")
 
   if (!activeOrg) {
     return (
@@ -33,7 +40,9 @@ export default async function SegmentReportingPage({ searchParams }: PageProps) 
         <p className="text-slate-500 text-sm mt-1">{activeOrg.name}</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <ReportActionButtons pdfUrl={pdfUrl} whatsappText={whatsappText} printTargetId="report-content" />
+
+      <div id="report-content" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3 flex-col sm:flex-row">
           <PieChart size={24} className="text-indigo-600" />
           <div>

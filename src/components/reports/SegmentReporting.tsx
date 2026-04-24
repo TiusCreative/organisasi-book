@@ -40,30 +40,7 @@ export default function SegmentReporting(props: { initialStartDate?: string; ini
     setLoading(true)
     setError("")
     try {
-      // TODO: Fetch from actual API when implemented
-      // For now, showing demo data
-      const demoData: SegmentData = {
-        byProduct: [
-          { id: "1", name: "Elektronik", type: "product", revenue: 15000000000, profit: 3000000000, assets: 8000000000, liabilities: 4000000000 },
-          { id: "2", name: "Fashion", type: "product", revenue: 8000000000, profit: 1200000000, assets: 3000000000, liabilities: 1500000000 },
-          { id: "3", name: "Makanan & Minuman", type: "product", revenue: 5000000000, profit: 800000000, assets: 2000000000, liabilities: 1000000000 }
-        ],
-        byGeographic: [
-          { id: "1", name: "Jakarta", type: "geographic", revenue: 12000000000, profit: 2000000000, assets: 6000000000, liabilities: 3000000000 },
-          { id: "2", name: "Surabaya", type: "geographic", revenue: 8000000000, profit: 1500000000, assets: 4000000000, liabilities: 2000000000 },
-          { id: "3", name: "Bandung", type: "geographic", revenue: 6000000000, profit: 1000000000, assets: 3000000000, liabilities: 1500000000 }
-        ],
-        byBusiness: [
-          { id: "1", name: "Retail", type: "business", revenue: 18000000000, profit: 3200000000, assets: 9000000000, liabilities: 4500000000 },
-          { id: "2", name: "Wholesale", type: "business", revenue: 7000000000, profit: 1200000000, assets: 3500000000, liabilities: 1800000000 },
-          { id: "3", name: "E-commerce", type: "business", revenue: 4000000000, profit: 600000000, assets: 1500000000, liabilities: 700000000 }
-        ],
-        totalRevenue: 29000000000,
-        totalProfit: 5000000000,
-        intersegmentRevenue: 2000000000
-      }
-
-      setData(demoData)
+      setData(null)
     } catch (e) {
       setData(null)
       setError(e instanceof Error ? e.message : "Gagal memuat laporan")
@@ -208,7 +185,7 @@ export default function SegmentReporting(props: { initialStartDate?: string; ini
         </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-          <p className="text-sm text-amber-900">Belum ada data segment untuk periode ini.</p>
+          <p className="text-sm text-amber-900">Tidak ada data segment untuk periode ini.</p>
         </div>
       )}
     </div>

@@ -42,43 +42,8 @@ export default function BusinessCombinationReport(props: { initialStartDate?: st
     setLoading(true)
     setError("")
     try {
-      // TODO: Fetch from actual API when implemented
-      // For now, showing demo data
-      const demoSubsidiaries: Subsidiary[] = [
-        {
-          id: "1",
-          name: "PT Subsidiary A",
-          acquisitionDate: "2024-01-15",
-          acquisitionCost: 5000000000,
-          fairValueAdjustment: 200000000,
-          goodwill: 300000000,
-          ownershipPercentage: 80
-        },
-        {
-          id: "2",
-          name: "CV Subsidiary B",
-          acquisitionDate: "2024-06-20",
-          acquisitionCost: 2500000000,
-          fairValueAdjustment: 100000000,
-          goodwill: 150000000,
-          ownershipPercentage: 60
-        }
-      ]
-      
-      const demoAcquisitions: Acquisition[] = [
-        {
-          id: "1",
-          targetEntity: "PT Target Company",
-          acquisitionDate: "2024-03-10",
-          considerationTransferred: 8000000000,
-          netAssetsAcquired: 6500000000,
-          goodwill: 1500000000,
-          nonControllingInterest: 1200000000
-        }
-      ]
-
-      setSubsidiaries(demoSubsidiaries)
-      setAcquisitions(demoAcquisitions)
+      setSubsidiaries([])
+      setAcquisitions([])
     } catch (e) {
       setSubsidiaries([])
       setAcquisitions([])
@@ -207,7 +172,7 @@ export default function BusinessCombinationReport(props: { initialStartDate?: st
         </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-          <p className="text-sm text-amber-900">Belum ada data kombinasi bisnis untuk periode ini.</p>
+          <p className="text-sm text-amber-900">Tidak ada data kombinasi bisnis untuk periode ini.</p>
         </div>
       )}
     </div>

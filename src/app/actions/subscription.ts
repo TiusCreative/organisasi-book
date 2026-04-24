@@ -13,14 +13,13 @@ import {
   applySubscriptionPaymentStatusUpdate,
   getOrganizationSubscriptionPayments,
 } from "../../lib/subscription-payment"
-
-const ANNUAL_SUBSCRIPTION_AMOUNT = Number(process.env.SUBSCRIPTION_ANNUAL_PRICE || "1200000")
+import { getSubscriptionPackageByCode, requirePackageAmountIdr } from "@/lib/subscription-packages"
 
 function buildOrderId(organizationId: string) {
   return `SUB-${organizationId.slice(0, 8)}-${Date.now()}`
 }
 
-export async function createMidtransAnnualPayment() {
+export async function createMidtransSubscriptionPayment(packageCode: string) {
   const { organization, user } = await requireCurrentOrganization({ allowExpired: true })
 
   if (user.role !== "ADMIN") {
@@ -31,12 +30,18 @@ export async function createMidtransAnnualPayment() {
     return { success: false, error: "Midtrans belum dikonfigurasi. Isi MIDTRANS_SERVER_KEY dan MIDTRANS_CLIENT_KEY terlebih dahulu." }
   }
 
+  const pkg = await getSubscriptionPackageByCode(packageCode)
+  if (!pkg || !pkg.isActive) {
+    return { success: false, error: "Paket berlangganan tidak valid." }
+  }
+
   const existingPending = await prisma.subscriptionPayment.findFirst({
     where: {
       organizationId: organization.id,
       provider: "MIDTRANS",
       status: "PENDING",
       redirectUrl: { not: null },
+      plan: pkg.code,
     },
     orderBy: { createdAt: "desc" },
   })
@@ -51,7 +56,12 @@ export async function createMidtransAnnualPayment() {
   }
 
   const orderId = buildOrderId(organization.id)
-  const amount = ANNUAL_SUBSCRIPTION_AMOUNT
+  let amount = 0
+  try {
+    amount = requirePackageAmountIdr(pkg)
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Harga paket tidak valid." }
+  }
 
   const snap = await createMidtransSnapTransaction({
     transaction_details: {
@@ -60,10 +70,10 @@ export async function createMidtransAnnualPayment() {
     },
     item_details: [
       {
-        id: "SUBSCRIPTION-ANNUAL",
+        id: `SUBSCRIPTION-${pkg.code}`,
         price: amount,
         quantity: 1,
-        name: `Langganan Tahunan OrgBook - ${organization.name}`,
+        name: `Langganan OrgBook (${pkg.name}) - ${organization.name}`,
       },
     ],
     customer_details: {
@@ -78,7 +88,7 @@ export async function createMidtransAnnualPayment() {
       organizationId: organization.id,
       orderId,
       provider: "MIDTRANS",
-      plan: "ANNUAL",
+      plan: pkg.code,
       years: 1,
       amount,
       currency: "IDR",

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { getGeneralLedgerDetailedReport, type AccountLedger } from "@/app/actions/general-ledger"
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -8,28 +9,6 @@ function formatCurrency(amount: number) {
     currency: "IDR",
     minimumFractionDigits: 0,
   }).format(amount || 0)
-}
-
-type LedgerEntry = {
-  id: string
-  date: string
-  accountCode: string
-  accountName: string
-  description: string
-  debit: number
-  credit: number
-  balance: number
-}
-
-type AccountLedger = {
-  accountCode: string
-  accountName: string
-  accountType: string
-  openingBalance: number
-  entries: LedgerEntry[]
-  closingBalance: number
-  totalDebit: number
-  totalCredit: number
 }
 
 export default function GeneralLedgerReport(props: { initialStartDate?: string; initialEndDate?: string }) {
@@ -43,52 +22,8 @@ export default function GeneralLedgerReport(props: { initialStartDate?: string; 
     setLoading(true)
     setError("")
     try {
-      // TODO: Fetch from actual API when implemented
-      // For now, showing demo data
-      const demoData: AccountLedger[] = [
-        {
-          accountCode: "1-1001",
-          accountName: "Kas",
-          accountType: "ASSET",
-          openingBalance: 5000000000,
-          entries: [
-            { id: "1", date: "2024-04-01", accountCode: "1-1001", accountName: "Kas", description: "Setoran modal", debit: 1000000000, credit: 0, balance: 6000000000 },
-            { id: "2", date: "2024-04-05", accountCode: "1-1001", accountName: "Kas", description: "Pembayaran supplier", debit: 0, credit: 2000000000, balance: 4000000000 },
-            { id: "3", date: "2024-04-10", accountCode: "1-1001", accountName: "Kas", description: "Penerimaan dari pelanggan", debit: 3000000000, credit: 0, balance: 7000000000 },
-          ],
-          closingBalance: 7000000000,
-          totalDebit: 4000000000,
-          totalCredit: 2000000000,
-        },
-        {
-          accountCode: "1-1002",
-          accountName: "Bank BCA",
-          accountType: "ASSET",
-          openingBalance: 10000000000,
-          entries: [
-            { id: "4", date: "2024-04-02", accountCode: "1-1002", accountName: "Bank BCA", description: "Transfer masuk", debit: 5000000000, credit: 0, balance: 15000000000 },
-            { id: "5", date: "2024-04-08", accountCode: "1-1002", accountName: "Bank BCA", description: "Pembayaran gaji", debit: 0, credit: 3000000000, balance: 12000000000 },
-          ],
-          closingBalance: 12000000000,
-          totalDebit: 5000000000,
-          totalCredit: 3000000000,
-        },
-        {
-          accountCode: "2-1001",
-          accountName: "Piutang Usaha",
-          accountType: "ASSET",
-          openingBalance: 3000000000,
-          entries: [
-            { id: "6", date: "2024-04-03", accountCode: "2-1001", accountName: "Piutang Usaha", description: "Penjualan kredit", debit: 2000000000, credit: 0, balance: 5000000000 },
-            { id: "7", date: "2024-04-15", accountCode: "2-1001", accountName: "Piutang Usaha", description: "Pembayaran pelanggan", debit: 0, credit: 1500000000, balance: 3500000000 },
-          ],
-          closingBalance: 3500000000,
-          totalDebit: 2000000000,
-          totalCredit: 1500000000,
-        },
-      ]
-
-      setData(demoData)
+      const result = await getGeneralLedgerDetailedReport({ startDate, endDate })
+      setData(result.accounts)
     } catch (e) {
       setData([])
       setError(e instanceof Error ? e.message : "Gagal memuat laporan")

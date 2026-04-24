@@ -1,5 +1,6 @@
 import { prisma } from "./prisma"
-import { addOneYear } from "./subscription"
+import { addMonths } from "./subscription"
+import { getSubscriptionPackageByCode } from "./subscription-packages"
 
 type ProvisionOrganizationInput = {
   ownerName: string
@@ -24,21 +25,26 @@ const defaultAccounts = [
   { code: "5001", name: "Biaya Operasional", type: "Expense" },
 ] as const
 
-function buildSubscriptionEndDate(years: number, startDate: Date) {
-  let endDate = new Date(startDate)
-  for (let index = 0; index < years; index += 1) {
-    endDate = addOneYear(endDate)
+async function buildSubscriptionEndDate(planCode: string, quantity: number, startDate: Date) {
+  const pkg = await getSubscriptionPackageByCode(planCode)
+  if (!pkg) {
+    return addMonths(startDate, 12 * quantity)
   }
-  return endDate
+  if (pkg.durationMonths === null) {
+    return null
+  }
+  return addMonths(startDate, pkg.durationMonths * quantity)
 }
 
 export async function provisionOrganizationWithOwner(input: ProvisionOrganizationInput) {
   const now = new Date()
-  const years = Math.max(1, input.years || 1)
+  const quantity = Math.max(1, input.years || 1)
+  const planCode = String(input.plan || "ANNUAL").trim() || "ANNUAL"
   const normalizedEmail = input.email.trim().toLowerCase()
   const subscriptionStatus = input.subscriptionStatus || "ACTIVE"
   const subscriptionStartsAt = subscriptionStatus === "PENDING" ? null : now
-  const subscriptionEndsAt = subscriptionStatus === "PENDING" ? null : buildSubscriptionEndDate(years, now)
+  const subscriptionEndsAt =
+    subscriptionStatus === "PENDING" ? null : await buildSubscriptionEndDate(planCode, quantity, now)
 
   return prisma.$transaction(async (tx) => {
     const organization = await tx.organization.create({
@@ -53,7 +59,7 @@ export async function provisionOrganizationWithOwner(input: ProvisionOrganizatio
         email: normalizedEmail,
         currency: "IDR",
         fiscalYearStart: 1,
-        subscriptionPlan: input.plan || "ANNUAL",
+        subscriptionPlan: planCode,
         subscriptionStatus,
         subscriptionStartsAt,
         subscriptionEndsAt,

@@ -50,7 +50,13 @@ const connectionString = resolveRuntimeDatabaseUrl()
 
 function hasRequiredDelegates(client: PrismaClient) {
   const prismaClient = client as unknown as Record<string, unknown>
-  return typeof prismaClient.user !== "undefined" && typeof prismaClient.salesOrder !== "undefined"
+  return (
+    typeof prismaClient.user !== "undefined" &&
+    typeof prismaClient.salesOrder !== "undefined" &&
+    typeof prismaClient.subscriptionPackage !== "undefined" &&
+    typeof prismaClient.attendanceRecord !== "undefined" &&
+    typeof prismaClient.facilityMaintenance !== "undefined"
+  )
 }
 
 const cachedPrisma = globalForPrisma.prisma

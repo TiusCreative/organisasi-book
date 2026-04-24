@@ -1,5 +1,6 @@
 import { prisma } from "./prisma"
-import { addOneYear, getRenewalBaseDate } from "./subscription"
+import { addMonths, getRenewalBaseDate } from "./subscription"
+import { getSubscriptionPackageByCode } from "./subscription-packages"
 
 export type SubscriptionPaymentSummary = {
   id: string
@@ -42,13 +43,20 @@ export async function applySubscriptionPaymentStatusUpdate(input: {
   })
 
   if (input.mappedStatus === "SETTLEMENT") {
+    const planCode = String(payment.plan || "ANNUAL").trim() || "ANNUAL"
+    const pkg = await getSubscriptionPackageByCode(planCode)
     const renewalBase = getRenewalBaseDate(payment.organization.subscriptionEndsAt)
-    const renewedUntil = addOneYear(renewalBase)
+
+    const quantity = Math.max(1, Number(payment.years || 1))
+    const renewedUntil =
+      pkg?.durationMonths === null
+        ? null
+        : addMonths(renewalBase, (pkg?.durationMonths || 12) * quantity)
 
     await prisma.organization.update({
       where: { id: payment.organizationId },
       data: {
-        subscriptionPlan: "ANNUAL",
+        subscriptionPlan: pkg?.code || planCode,
         subscriptionStatus: "ACTIVE",
         subscriptionStartsAt: payment.organization.subscriptionStartsAt || new Date(),
         subscriptionEndsAt: renewedUntil,

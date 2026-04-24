@@ -6,12 +6,14 @@ interface ReportActionButtonsProps {
   pdfUrl: string
   whatsappText: string
   printTargetId?: string
+  shareUrl?: string
 }
 
 export default function ReportActionButtons({
   pdfUrl,
   whatsappText,
   printTargetId,
+  shareUrl,
 }: ReportActionButtonsProps) {
   const handlePrint = () => {
     if (printTargetId) {
@@ -43,8 +45,22 @@ export default function ReportActionButtons({
     window.open(pdfUrl, "_blank", "noopener,noreferrer")
   }
 
-  const handleShareWhatsApp = () => {
-    const encodedMessage = encodeURIComponent(whatsappText)
+  const handleShare = async () => {
+    const url = shareUrl || pdfUrl || window.location.href
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      try {
+        await navigator.share({
+          title: "Laporan",
+          text: whatsappText,
+          url,
+        })
+        return
+      } catch {
+        // fall through to WhatsApp fallback
+      }
+    }
+
+    const encodedMessage = encodeURIComponent([whatsappText, url ? `\n\n${url}` : ""].join(""))
     window.open(`https://wa.me/?text=${encodedMessage}`, "_blank", "noopener,noreferrer")
   }
 
@@ -66,10 +82,10 @@ export default function ReportActionButtons({
       </button>
       <button
         type="button"
-        onClick={handleShareWhatsApp}
+        onClick={handleShare}
         className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-bold"
       >
-        <Share2 size={18} /> WhatsApp
+        <Share2 size={18} /> Bagikan
       </button>
     </div>
   )

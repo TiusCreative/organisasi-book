@@ -66,6 +66,7 @@ export default function DashboardLayout({
     { name: 'Aset', icon: Package, href: '/aset', permission: 'assets' as ModulePermission },
     { name: 'Penyusutan', icon: Settings, href: '/penyusutan', permission: 'depreciation' as ModulePermission },
     { name: 'Gaji', icon: Users, href: '/gaji', permission: 'payroll' as ModulePermission },
+    { name: 'HR & GA', icon: Briefcase, href: '/hr-ga', permission: 'hrga' as ModulePermission },
     { name: 'Pajak', icon: BadgePercent, href: '/pajak', permission: 'taxes' as ModulePermission },
     { name: 'Berlangganan', icon: Shield, href: '/berlangganan', permission: 'subscription' as ModulePermission },
   ]

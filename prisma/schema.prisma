@@ -132,6 +132,22 @@ model Organization {
   branches              Branch[]
   budgets               Budget[]
   divisions             Division[]
+  attendanceRecords     AttendanceRecord[]
+  facilityMaintenances  FacilityMaintenance[]
+}
+
+// Paket berlangganan (dikelola platform admin)
+model SubscriptionPackage {
+  id             String   @id @default(uuid())
+  code           String   @unique // contoh: MONTHLY, ANNUAL, atau kode custom
+  name           String
+  durationMonths Int?
+  amountIdr      Int?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 // 2. Tabel Kategori Akun
@@ -278,6 +294,7 @@ model Employee {
   salarySlips  SalarySlip[]
   allowances   Allowance[]
   deductions   Deduction[]
+  attendanceRecords AttendanceRecord[]
 }
 
 // 7. Tabel Tunjangan (Allowances)
@@ -334,6 +351,48 @@ model SalarySlip {
 
   // Unique constraint: 1 karyawan hanya bisa punya 1 slip per bulan
   @@unique([employeeId, month, year])
+}
+
+// Absensi (Time & Attendance) - dasar untuk lembur & payroll
+model AttendanceRecord {
+  id             String   @id @default(uuid())
+  organizationId String
+  employeeId     String
+  date           DateTime
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  overtimeMinutes Int     @default(0)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([organizationId, date])
+  @@index([employeeId, date])
+}
+
+// Jadwal maintenance fasilitas/GA (kendaraan, gedung, dll)
+model FacilityMaintenance {
+  id             String   @id @default(uuid())
+  organizationId String
+  assetName      String
+  assetCategory  String? // kendaraan, gedung, dll
+  scheduledAt    DateTime
+  completedAt    DateTime?
+  status         String   @default("PLANNED") // PLANNED, DONE, CANCELLED
+  estimatedCost  Float    @default(0)
+  actualCost     Float    @default(0)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, scheduledAt])
+  @@index([status])
 }
 
 model TaxEntry {

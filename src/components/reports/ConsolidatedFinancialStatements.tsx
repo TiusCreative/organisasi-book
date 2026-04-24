@@ -66,50 +66,10 @@ export default function ConsolidatedFinancialStatements(props: { initialStartDat
     setLoading(true)
     setError("")
     try {
-      // TODO: Fetch from actual API when implemented
-      // For now, showing demo data
-      const demoEntities: Entity[] = [
-        { id: "1", name: "PT Parent Company", type: "parent", ownershipPercentage: 100 },
-        { id: "2", name: "PT Subsidiary A", type: "subsidiary", ownershipPercentage: 80 },
-        { id: "3", name: "CV Subsidiary B", type: "subsidiary", ownershipPercentage: 60 }
-      ]
-
-      const demoBalanceSheet: ConsolidatedBalanceSheet = {
-        parentAssets: 15000000000,
-        subsidiariesAssets: 8000000000,
-        consolidatedAssets: 23000000000,
-        parentLiabilities: 8000000000,
-        subsidiariesLiabilities: 4000000000,
-        consolidatedLiabilities: 12000000000,
-        parentEquity: 7000000000,
-        subsidiariesEquity: 4000000000,
-        consolidatedEquity: 11000000000,
-        nonControllingInterest: 1600000000
-      }
-
-      const demoIncomeStatement: ConsolidatedIncomeStatement = {
-        parentRevenue: 25000000000,
-        subsidiariesRevenue: 12000000000,
-        consolidatedRevenue: 37000000000,
-        parentExpenses: 18000000000,
-        subsidiariesExpenses: 9000000000,
-        consolidatedExpenses: 27000000000,
-        parentNetIncome: 7000000000,
-        subsidiariesNetIncome: 3000000000,
-        consolidatedNetIncome: 10000000000,
-        intercompanyEliminations: 500000000
-      }
-
-      const demoIntercompany: IntercompanyTransaction[] = [
-        { id: "1", description: "Intercompany Sales", amount: 2000000000, type: "revenue", fromEntity: "PT Parent Company", toEntity: "PT Subsidiary A" },
-        { id: "2", description: "Intercompany Loans", amount: 1500000000, type: "receivable", fromEntity: "PT Parent Company", toEntity: "CV Subsidiary B" },
-        { id: "3", description: "Management Fees", amount: 500000000, type: "expense", fromEntity: "PT Subsidiary A", toEntity: "PT Parent Company" }
-      ]
-
-      setEntities(demoEntities)
-      setBalanceSheet(demoBalanceSheet)
-      setIncomeStatement(demoIncomeStatement)
-      setIntercompanyTransactions(demoIntercompany)
+      setEntities([])
+      setBalanceSheet(null)
+      setIncomeStatement(null)
+      setIntercompanyTransactions([])
     } catch (e) {
       setEntities([])
       setBalanceSheet(null)
@@ -308,7 +268,7 @@ export default function ConsolidatedFinancialStatements(props: { initialStartDat
         </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-          <p className="text-sm text-amber-900">Belum ada data konsolidasi untuk periode ini.</p>
+          <p className="text-sm text-amber-900">Tidak ada data konsolidasi untuk periode ini.</p>
         </div>
       )}
     </div>

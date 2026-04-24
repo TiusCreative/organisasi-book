@@ -7,17 +7,24 @@ import {
   deletePlatformOrganization,
   resetPlatformOwnerPassword,
   updatePlatformOwnerEmail,
+  extendPlatformOrganizationSubscription,
+  deleteSubscriptionPaymentAdmin,
+  syncMidtransPaymentStatus,
+  updateSubscriptionPaymentAdmin,
 } from "../actions/platform-admin"
 import { prisma } from "../../lib/prisma"
 import PlatformClientProvisionForm from "../../components/platform-admin/PlatformClientProvisionForm"
 import PlatformOwnerAccessActions from "../../components/platform-admin/PlatformOwnerAccessActions"
 import DeleteOrganizationButton from "../../components/platform-admin/DeleteOrganizationButton"
+import SubscriptionPackageManager from "@/components/platform-admin/SubscriptionPackageManager"
+import { ensureDefaultSubscriptionPackages } from "@/lib/subscription-packages"
 
 type PlatformAdminPageProps = {
   searchParams?: Promise<{
     q?: string
     status?: string
     payments?: string
+    paymentStatus?: string
   }>
 }
 
@@ -45,11 +52,18 @@ function formatDateInput(date?: Date | null) {
 
 export default async function PlatformAdminPage({ searchParams }: PlatformAdminPageProps) {
   await requirePlatformAdmin()
+  let subscriptionPackageWarning = ""
+  try {
+    await ensureDefaultSubscriptionPackages()
+  } catch (error) {
+    subscriptionPackageWarning = error instanceof Error ? error.message : "Gagal inisialisasi paket berlangganan."
+  }
 
   const params = searchParams ? await searchParams : {}
   const query = (params.q || "").trim()
   const statusFilter = (params.status || "all").trim()
   const paymentFilter = (params.payments || "all").trim()
+  const paymentStatusFilter = (params.paymentStatus || "all").trim()
 
   const organizationWhere = query
     ? {
@@ -73,6 +87,7 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
         }
       : {}),
     ...(paymentFilter === "midtrans-only" ? { provider: "MIDTRANS" } : {}),
+    ...(paymentStatusFilter === "all" ? {} : { status: paymentStatusFilter }),
   }
 
   const [organizations, payments, organizationCount, auditLogs] = await Promise.all([
@@ -128,6 +143,19 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
       take: 20,
     }),
   ])
+
+  let packageOptions: Array<{ code: string; name: string; durationMonths: number | null; amountIdr: number | null }> = []
+  try {
+    packageOptions = await prisma.subscriptionPackage.findMany({
+      where: { isActive: true },
+      orderBy: [{ durationMonths: "asc" }, { createdAt: "asc" }],
+      select: { code: true, name: true, durationMonths: true, amountIdr: true },
+    })
+  } catch (error) {
+    if (!subscriptionPackageWarning) {
+      subscriptionPackageWarning = error instanceof Error ? error.message : "Gagal memuat paket berlangganan."
+    }
+  }
 
   const filteredOrganizations = organizations.filter((organization) => {
     const expired = organization.subscriptionEndsAt
@@ -185,7 +213,7 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
       </div>
 
       <form className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-5">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-slate-400" />
             <input
@@ -214,13 +242,38 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
             <option value="all">Semua Pembayaran</option>
             <option value="midtrans-only">Midtrans Only</option>
           </select>
+          <select
+            name="paymentStatus"
+            defaultValue={paymentStatusFilter}
+            className="rounded-xl border border-slate-200 px-4 py-3 text-sm"
+          >
+            <option value="all">Semua Status Payment</option>
+            <option value="PENDING">PENDING</option>
+            <option value="SETTLEMENT">SETTLEMENT</option>
+            <option value="DENY">DENY</option>
+            <option value="CANCEL">CANCEL</option>
+            <option value="EXPIRE">EXPIRE</option>
+          </select>
           <button className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">
             Cari
           </button>
         </div>
       </form>
 
-      <PlatformClientProvisionForm />
+      {subscriptionPackageWarning ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          {subscriptionPackageWarning}
+        </div>
+      ) : null}
+
+      <PlatformClientProvisionForm
+        packages={packageOptions.map((pkg) => ({
+          code: pkg.code,
+          name: pkg.name,
+        }))}
+      />
+
+      <SubscriptionPackageManager />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="text-lg font-bold text-slate-800">Organisasi</h2>
@@ -236,6 +289,7 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
                 <th className="px-4 py-3 font-bold">Akses Owner</th>
                 <th className="px-4 py-3 font-bold">Aksi Cepat</th>
                 <th className="px-4 py-3 font-bold">Set Expiry</th>
+                <th className="px-4 py-3 font-bold">Tambah Paket</th>
                 <th className="px-4 py-3 font-bold">Kelola Owner</th>
                 <th className="px-4 py-3 font-bold">Hapus</th>
               </tr>
@@ -262,6 +316,7 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusBadgeClasses(organization.subscriptionStatus)}`}>
                       {organization.subscriptionStatus}
                     </span>
+                    <div className="mt-1 text-xs text-slate-500">{organization.subscriptionPlan}</div>
                   </td>
                   <td className="px-4 py-4 text-slate-600">
                     {organization.subscriptionEndsAt
@@ -300,6 +355,29 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
                       />
                       <button className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800">
                         Simpan
+                      </button>
+                    </form>
+                  </td>
+                  <td className="px-4 py-4">
+                    <form action={extendPlatformOrganizationSubscription} className="flex flex-col gap-2 sm:flex-row">
+                      <input type="hidden" name="organizationId" value={organization.id} />
+                      <select name="plan" defaultValue="ANNUAL" className="rounded-lg border border-slate-200 px-3 py-2 text-xs">
+                        {packageOptions.map((pkg) => (
+                          <option key={pkg.code} value={pkg.code}>
+                            {pkg.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="1"
+                        name="quantity"
+                        defaultValue={1}
+                        className="w-20 rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                        title="Qty"
+                      />
+                      <button className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+                        Tambah
                       </button>
                     </form>
                   </td>
@@ -347,7 +425,7 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
               ))}
               {filteredOrganizations.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
                     Tidak ada organisasi yang cocok dengan pencarian ini.
                   </td>
                 </tr>
@@ -367,8 +445,11 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
                 <th className="px-4 py-3 font-bold">Order ID</th>
                 <th className="px-4 py-3 font-bold">Provider</th>
                 <th className="px-4 py-3 font-bold">Status</th>
+                <th className="px-4 py-3 font-bold">Plan</th>
                 <th className="px-4 py-3 font-bold">Nominal</th>
                 <th className="px-4 py-3 font-bold">Dibuat</th>
+                <th className="px-4 py-3 font-bold">PaidAt</th>
+                <th className="px-4 py-3 font-bold text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -382,15 +463,56 @@ export default async function PlatformAdminPage({ searchParams }: PlatformAdminP
                       {payment.status}
                     </span>
                   </td>
+                  <td className="px-4 py-4 text-slate-600">{payment.plan || "-"}</td>
                   <td className="px-4 py-4 text-slate-600">Rp {payment.amount.toLocaleString("id-ID")}</td>
                   <td className="px-4 py-4 text-slate-600">
                     {new Date(payment.createdAt).toLocaleDateString("id-ID")}
+                  </td>
+                  <td className="px-4 py-4 text-slate-600">
+                    {payment.paidAt ? new Date(payment.paidAt).toLocaleString("id-ID") : "-"}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      {payment.provider === "MIDTRANS" && (
+                        <form action={syncMidtransPaymentStatus}>
+                          <input type="hidden" name="orderId" value={payment.orderId} />
+                          <button className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+                            Sync
+                          </button>
+                        </form>
+                      )}
+
+                      <form action={updateSubscriptionPaymentAdmin} className="flex flex-col gap-2 sm:flex-row">
+                        <input type="hidden" name="id" value={payment.id} />
+                        <input type="text" name="plan" defaultValue={payment.plan || ""} placeholder="Plan" className="w-28 rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+                        <input type="number" min="1" name="years" defaultValue={payment.years || 1} className="w-16 rounded-lg border border-slate-200 px-3 py-2 text-xs" title="Qty" />
+                        <input type="number" min="0" name="amount" defaultValue={payment.amount} className="w-28 rounded-lg border border-slate-200 px-3 py-2 text-xs" title="Amount" />
+                        <select name="status" defaultValue={payment.status} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">
+                          <option value="PENDING">PENDING</option>
+                          <option value="SETTLEMENT">SETTLEMENT</option>
+                          <option value="DENY">DENY</option>
+                          <option value="CANCEL">CANCEL</option>
+                          <option value="EXPIRE">EXPIRE</option>
+                        </select>
+                        <input type="datetime-local" name="paidAt" className="rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+                        <button className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800">
+                          Save
+                        </button>
+                      </form>
+
+                      <form action={deleteSubscriptionPaymentAdmin}>
+                        <input type="hidden" name="id" value={payment.id} />
+                        <button className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100">
+                          Delete
+                        </button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))}
               {payments.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
                     Belum ada pembayaran Midtrans yang cocok dengan filter ini.
                   </td>
                 </tr>

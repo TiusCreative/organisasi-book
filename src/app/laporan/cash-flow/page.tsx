@@ -1,7 +1,8 @@
-import { TrendingUp, TrendingDown, DollarSign } from "lucide-react"
+import { DollarSign } from "lucide-react"
 import { requireCurrentOrganization, requireModuleAccess } from "../../../lib/auth"
 import CashFlowStatement from "../../../components/reports/CashFlowStatement"
-import { resolveDateRange, formatInputDate } from "../../../lib/date-range"
+import { resolveDateRange, formatInputDate, formatDateRange } from "../../../lib/date-range"
+import ReportActionButtons from "../../../components/reports/ReportActionButtons"
 
 type CashFlowPageProps = {
   searchParams?: Promise<{
@@ -15,6 +16,12 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
   const { organization: activeOrg } = await requireCurrentOrganization()
   const params = searchParams ? await searchParams : {}
   const { startDate, endDate } = resolveDateRange(params)
+  const pdfUrl = `/api/${activeOrg.id}/reports/cash-flow/pdf?startDate=${formatInputDate(startDate)}&endDate=${formatInputDate(endDate)}`
+  const whatsappText = [
+    "Cash Flow Statement",
+    `Nama Organisasi: ${activeOrg.name}`,
+    `Periode: ${formatDateRange(startDate, endDate)}`,
+  ].join("\n")
 
   if (!activeOrg) {
     return (
@@ -32,7 +39,9 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
         <p className="text-slate-500 text-sm mt-1">Laporan arus kas organisasi</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <ReportActionButtons pdfUrl={pdfUrl} whatsappText={whatsappText} printTargetId="report-content" />
+
+      <div id="report-content" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3 flex-col sm:flex-row">
           <DollarSign size={24} className="text-emerald-600" />
           <div>

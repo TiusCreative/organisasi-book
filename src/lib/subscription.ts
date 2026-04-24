@@ -8,6 +8,12 @@ export function addOneYear(referenceDate = new Date()) {
   return next
 }
 
+export function addMonths(referenceDate: Date, months: number) {
+  const next = new Date(referenceDate)
+  next.setMonth(next.getMonth() + Math.max(0, Number(months) || 0))
+  return next
+}
+
 export function isSubscriptionExpired(endDate?: Date | null) {
   if (!endDate) {
     return false

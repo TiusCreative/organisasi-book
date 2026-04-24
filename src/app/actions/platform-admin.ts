@@ -6,6 +6,10 @@ import { prisma } from "../../lib/prisma"
 import { createPasswordHash, requirePlatformAdmin } from "../../lib/auth"
 import { logAudit } from "../../lib/audit-logger"
 import { provisionOrganizationWithOwner } from "../../lib/organization-provisioning"
+import { getSubscriptionPackageByCode } from "@/lib/subscription-packages"
+import { addMonths } from "@/lib/subscription"
+import { getMidtransTransactionStatus, mapMidtransTransactionStatus, isMidtransConfigured } from "@/lib/midtrans"
+import { applySubscriptionPaymentStatusUpdate } from "@/lib/subscription-payment"
 
 export async function createPlatformClientTenant(formData: FormData) {
   const admin = await requirePlatformAdmin()
@@ -15,7 +19,7 @@ export async function createPlatformClientTenant(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase()
   const password = String(formData.get("password") || "")
   const type = String(formData.get("type") || "PERUSAHAAN").trim()
-  const plan = String(formData.get("plan") || "ANNUAL").trim()
+  const plan = String(formData.get("plan") || "ANNUAL").trim() || "ANNUAL"
   const address = String(formData.get("address") || "").trim()
   const city = String(formData.get("city") || "").trim()
   const province = String(formData.get("province") || "").trim()
@@ -34,6 +38,11 @@ export async function createPlatformClientTenant(formData: FormData) {
 
   if (!["ACTIVE", "PENDING", "SUSPENDED"].includes(subscriptionStatus)) {
     return { success: false, error: "Status subscription awal tidak valid." }
+  }
+
+  const pkg = await getSubscriptionPackageByCode(plan)
+  if (!pkg || !pkg.isActive) {
+    return { success: false, error: "Paket subscription tidak valid." }
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email } })
@@ -77,6 +86,80 @@ export async function createPlatformClientTenant(formData: FormData) {
 
   revalidatePath("/platform-admin")
   return { success: true, organizationId: organization.id }
+}
+
+export async function extendPlatformOrganizationSubscription(formData: FormData) {
+  const admin = await requirePlatformAdmin()
+
+  const organizationId = String(formData.get("organizationId") || "")
+  const planId = String(formData.get("plan") || "ANNUAL").trim() || "ANNUAL"
+  const quantity = Math.max(1, Number(formData.get("quantity") || "1"))
+
+  if (!organizationId) {
+    return { success: false, error: "ID organisasi tidak lengkap." }
+  }
+
+  const pkg = await getSubscriptionPackageByCode(planId)
+  if (!pkg || !pkg.isActive) {
+    return { success: false, error: "Paket subscription tidak valid." }
+  }
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: {
+      subscriptionStartsAt: true,
+      subscriptionEndsAt: true,
+      subscriptionStatus: true,
+      subscriptionPlan: true,
+    },
+  })
+
+  if (!organization) {
+    return { success: false, error: "Organisasi tidak ditemukan." }
+  }
+
+  const baseDate =
+    organization.subscriptionEndsAt && new Date(organization.subscriptionEndsAt).getTime() > Date.now()
+      ? new Date(organization.subscriptionEndsAt)
+      : new Date()
+
+  const nextEndDate =
+    pkg.durationMonths === null ? null : addMonths(baseDate, (pkg.durationMonths || 12) * quantity)
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: {
+      subscriptionPlan: pkg.code,
+      subscriptionStatus: "ACTIVE",
+      subscriptionStartsAt: organization.subscriptionStartsAt || new Date(),
+      subscriptionEndsAt: nextEndDate,
+      status: "ACTIVE",
+    },
+  })
+
+  await logAudit({
+    organizationId,
+    action: "UPDATE",
+    entity: "OrganizationSubscription",
+    entityId: organizationId,
+    userId: admin.id,
+    userName: admin.name,
+    userEmail: admin.email,
+    oldData: {
+      subscriptionPlan: organization.subscriptionPlan,
+      subscriptionStatus: organization.subscriptionStatus,
+      subscriptionEndsAt: organization.subscriptionEndsAt,
+    },
+    newData: {
+      subscriptionPlan: pkg.code,
+      subscriptionStatus: "ACTIVE",
+      subscriptionEndsAt: nextEndDate,
+    },
+    reason: `Platform admin memperpanjang subscription (${pkg.code} x${quantity})`,
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true }
 }
 
 export async function setPlatformOrganizationSubscriptionStatus(formData: FormData) {
@@ -443,6 +526,219 @@ export async function updatePlatformOwnerEmail(formData: FormData) {
     oldData: { oldEmail: organization.users[0].email },
     newData: { newEmail },
     reason: "Platform admin mengubah email owner",
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function createSubscriptionPackage(formData: FormData) {
+  await requirePlatformAdmin()
+
+  const code = String(formData.get("code") || "").trim().toUpperCase()
+  const name = String(formData.get("name") || "").trim()
+  const durationRaw = String(formData.get("durationMonths") || "").trim()
+  const amountRaw = String(formData.get("amountIdr") || "").trim()
+  const isActive = String(formData.get("isActive") || "on") === "on"
+
+  if (!code || !name) {
+    return { success: false, error: "Kode dan nama paket wajib diisi." }
+  }
+
+  const durationMonths = durationRaw ? Math.max(1, Number(durationRaw)) : null
+  const amountIdr = amountRaw ? Math.max(0, Number(amountRaw)) : null
+
+  try {
+    await prisma.subscriptionPackage.create({
+      data: {
+        code,
+        name,
+        durationMonths: durationMonths && Number.isFinite(durationMonths) ? Math.trunc(durationMonths) : null,
+        amountIdr: amountIdr && Number.isFinite(amountIdr) ? Math.trunc(amountIdr) : null,
+        isActive,
+      },
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { success: false, error: "Kode paket sudah ada." }
+    }
+    return { success: false, error: error instanceof Error ? error.message : "Gagal membuat paket." }
+  }
+
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function updateSubscriptionPackage(formData: FormData) {
+  await requirePlatformAdmin()
+
+  const id = String(formData.get("id") || "").trim()
+  const name = String(formData.get("name") || "").trim()
+  const durationRaw = String(formData.get("durationMonths") || "").trim()
+  const amountRaw = String(formData.get("amountIdr") || "").trim()
+  const isActive = String(formData.get("isActive") || "off") === "on"
+
+  if (!id || !name) {
+    return { success: false, error: "Data paket tidak lengkap." }
+  }
+
+  const durationMonths = durationRaw ? Math.max(1, Number(durationRaw)) : null
+  const amountIdr = amountRaw ? Math.max(0, Number(amountRaw)) : null
+
+  await prisma.subscriptionPackage.update({
+    where: { id },
+    data: {
+      name,
+      durationMonths: durationMonths && Number.isFinite(durationMonths) ? Math.trunc(durationMonths) : null,
+      amountIdr: amountIdr && Number.isFinite(amountIdr) ? Math.trunc(amountIdr) : null,
+      isActive,
+    },
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function deleteSubscriptionPackage(formData: FormData) {
+  await requirePlatformAdmin()
+
+  const id = String(formData.get("id") || "").trim()
+  if (!id) {
+    return { success: false, error: "ID paket tidak lengkap." }
+  }
+
+  await prisma.subscriptionPackage.delete({ where: { id } })
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function syncMidtransPaymentStatus(formData: FormData) {
+  await requirePlatformAdmin()
+
+  if (!isMidtransConfigured()) {
+    return { success: false, error: "Midtrans belum dikonfigurasi." }
+  }
+
+  const orderId = String(formData.get("orderId") || "").trim()
+  if (!orderId) return { success: false, error: "Order ID tidak valid." }
+
+  const payment = await prisma.subscriptionPayment.findUnique({
+    where: { orderId },
+    select: { orderId: true, provider: true },
+  })
+
+  if (!payment) return { success: false, error: "Payment tidak ditemukan." }
+  if (payment.provider !== "MIDTRANS") return { success: false, error: "Sync hanya untuk MIDTRANS." }
+
+  const statusPayload = await getMidtransTransactionStatus(orderId)
+  const transactionStatus = String(statusPayload.transaction_status || "")
+  const mappedStatus = mapMidtransTransactionStatus(
+    transactionStatus,
+    statusPayload.fraud_status ? String(statusPayload.fraud_status) : null
+  )
+
+  await applySubscriptionPaymentStatusUpdate({
+    orderId,
+    mappedStatus,
+    paymentType: statusPayload.payment_type ? String(statusPayload.payment_type) : null,
+    transactionId: statusPayload.transaction_id ? String(statusPayload.transaction_id) : null,
+    payload: statusPayload,
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true, status: mappedStatus }
+}
+
+export async function updateSubscriptionPaymentAdmin(formData: FormData) {
+  const admin = await requirePlatformAdmin()
+
+  const id = String(formData.get("id") || "").trim()
+  const status = String(formData.get("status") || "").trim()
+  const plan = String(formData.get("plan") || "").trim()
+  const years = Math.max(1, Number(formData.get("years") || "1"))
+  const amount = Math.max(0, Number(formData.get("amount") || "0"))
+  const paidAtRaw = String(formData.get("paidAt") || "").trim()
+
+  if (!id || !status) {
+    return { success: false, error: "Data payment tidak lengkap." }
+  }
+
+  const existing = await prisma.subscriptionPayment.findUnique({ where: { id } })
+  if (!existing) return { success: false, error: "Payment tidak ditemukan." }
+
+  const paidAt = paidAtRaw ? new Date(paidAtRaw) : existing.paidAt
+  if (paidAt && Number.isNaN(paidAt.getTime())) {
+    return { success: false, error: "Tanggal paidAt tidak valid." }
+  }
+
+  await prisma.subscriptionPayment.update({
+    where: { id },
+    data: {
+      status,
+      plan: plan || existing.plan,
+      years,
+      amount: Number.isFinite(amount) ? amount : existing.amount,
+      paidAt,
+    },
+  })
+
+  await logAudit({
+    organizationId: existing.organizationId,
+    action: "UPDATE",
+    entity: "SubscriptionPayment",
+    entityId: existing.id,
+    userId: admin.id,
+    userName: admin.name,
+    userEmail: admin.email,
+    oldData: {
+      status: existing.status,
+      plan: existing.plan,
+      years: existing.years,
+      amount: existing.amount,
+      paidAt: existing.paidAt,
+    },
+    newData: {
+      status,
+      plan: plan || existing.plan,
+      years,
+      amount: Number.isFinite(amount) ? amount : existing.amount,
+      paidAt,
+    },
+    reason: "Platform admin mengubah payment subscription",
+  })
+
+  revalidatePath("/platform-admin")
+  return { success: true }
+}
+
+export async function deleteSubscriptionPaymentAdmin(formData: FormData) {
+  const admin = await requirePlatformAdmin()
+
+  const id = String(formData.get("id") || "").trim()
+  if (!id) return { success: false, error: "ID payment tidak valid." }
+
+  const existing = await prisma.subscriptionPayment.findUnique({ where: { id } })
+  if (!existing) return { success: false, error: "Payment tidak ditemukan." }
+
+  await prisma.subscriptionPayment.delete({ where: { id } })
+
+  await logAudit({
+    organizationId: existing.organizationId,
+    action: "DELETE",
+    entity: "SubscriptionPayment",
+    entityId: existing.id,
+    userId: admin.id,
+    userName: admin.name,
+    userEmail: admin.email,
+    oldData: {
+      orderId: existing.orderId,
+      provider: existing.provider,
+      status: existing.status,
+      plan: existing.plan,
+      amount: existing.amount,
+      paidAt: existing.paidAt,
+    },
+    reason: "Platform admin menghapus payment subscription",
   })
 
   revalidatePath("/platform-admin")
