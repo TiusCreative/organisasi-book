@@ -4,6 +4,7 @@
  */
 
 import { logAudit } from './audit-logger'
+import { createJournal, createJournalInTx } from "@/lib/accounting/journal"
 import { prisma } from './prisma'
 
 export interface PayrollJournalInput {
@@ -288,17 +289,18 @@ export async function createPayrollJournal(input: PayrollJournalInput): Promise<
         throw new Error(`Journal tidak balance: Debit ${resolvedBalance.totalDebit} vs Credit ${resolvedBalance.totalCredit}`)
       }
 
-      return tx.transaction.create({
-        data: {
-          organizationId: input.organizationId,
-          date: new Date(input.year, input.month - 1, 1),
-          description: `Jurnal Payroll ${input.month}/${input.year} - Employee: ${input.employeeId}`,
-          reference,
-          lines: {
-            create: resolvedLines,
-          },
+      const posted = await createJournalInTx(tx, {
+        organizationId: input.organizationId,
+        date: new Date(input.year, input.month - 1, 1),
+        description: `Jurnal Payroll ${input.month}/${input.year} - Employee: ${input.employeeId}`,
+        reference,
+        lines: resolvedLines,
+        audit: {
+          userId: input.userId,
         },
       })
+
+      return { id: posted.transactionId }
     })
 
     await logAudit({
@@ -396,14 +398,14 @@ export async function createDailyTransactionJournal(input: {
       }))
     )
 
-    const transaction = await prisma.transaction.create({
-      data: {
-        organizationId: input.organizationId,
-        date: input.date,
-        description: input.description,
-        lines: {
-          create: resolvedLines,
-        },
+    const posted = await createJournal({
+      organizationId: input.organizationId,
+      date: input.date,
+      description: input.description,
+      reference: null,
+      lines: resolvedLines,
+      audit: {
+        userId: input.userId,
       },
     })
 
@@ -411,14 +413,14 @@ export async function createDailyTransactionJournal(input: {
       organizationId: input.organizationId,
       action: 'CREATE',
       entity: 'DailyTransaction',
-      entityId: transaction.id,
+      entityId: posted.transactionId,
       userId: input.userId,
       status: 'SUCCESS',
     })
 
     return {
       success: true,
-      journalId: transaction.id,
+      journalId: posted.transactionId,
       lines: input.lines.map((line) => ({
         accountCode: line.accountCode,
         accountName: line.accountCode,

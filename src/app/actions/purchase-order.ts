@@ -1,15 +1,30 @@
 "use server"
 
-import { prisma } from "../../lib/prisma"
-import { requireCurrentOrganization } from "../../lib/auth"
+import type { UserRole } from "@prisma/client"
+
+import { prisma } from "@/lib/prisma"
+import { requireModuleAccess, requireWritableModuleAccess } from "@/lib/auth"
+import { createApprovalRequestInTx, getPendingApprovalRequestByEntityInTx, resolveApprovalRequestInTx } from "@/lib/approval-workflow"
 import { revalidatePath } from "next/cache"
+import { postInventoryMovementInTx } from "@/lib/inventory-ledger"
+
+type PurchaseOrderItemInput = {
+  itemId?: string
+  description: string
+  quantity: number | string
+  unitPrice: number | string
+  discount?: number | string
+  taxRate?: number | string
+}
+
+function assertApproverRole(role: UserRole) {
+  if (role !== "ADMIN" && role !== "MANAGER") {
+    throw new Error("Hanya ADMIN/MANAGER yang bisa menyetujui/menolak.")
+  }
+}
 
 export async function createPurchaseOrder(formData: FormData) {
-  const { organization, user } = await requireCurrentOrganization()
-
-  if (!user.permissions.includes("arap")) {
-    throw new Error("Anda tidak memiliki izin untuk membuat Purchase Order.")
-  }
+  const { organization } = await requireWritableModuleAccess("arap")
 
   const supplierId = formData.get("supplierId") as string
   const orderDate = new Date(formData.get("orderDate") as string)
@@ -17,7 +32,7 @@ export async function createPurchaseOrder(formData: FormData) {
   const notes = formData.get("notes") as string | null
   const itemsJson = formData.get("items") as string
 
-  const items = JSON.parse(itemsJson)
+  const items = JSON.parse(itemsJson) as PurchaseOrderItemInput[]
 
   // Generate PO number
   const year = new Date().getFullYear()
@@ -41,10 +56,15 @@ export async function createPurchaseOrder(formData: FormData) {
   let taxAmount = 0
   let discountAmount = 0
 
-  const calculatedItems = items.map((item: any) => {
-    const itemSubtotal = parseFloat(item.quantity) * parseFloat(item.unitPrice)
-    const itemDiscount = itemSubtotal * (parseFloat(item.discount) / 100)
-    const itemTax = (itemSubtotal - itemDiscount) * (parseFloat(item.taxRate) / 100)
+  const calculatedItems = items.map((item) => {
+    const quantity = Number(item.quantity || 0)
+    const unitPrice = Number(item.unitPrice || 0)
+    const discount = Number(item.discount || 0)
+    const taxRate = Number(item.taxRate ?? 0)
+
+    const itemSubtotal = quantity * unitPrice
+    const itemDiscount = itemSubtotal * (discount / 100)
+    const itemTax = (itemSubtotal - itemDiscount) * (taxRate / 100)
     const itemTotal = itemSubtotal - itemDiscount + itemTax
 
     subtotal += itemSubtotal
@@ -53,6 +73,10 @@ export async function createPurchaseOrder(formData: FormData) {
 
     return {
       ...item,
+      quantity,
+      unitPrice,
+      discount,
+      taxRate,
       subtotal: itemSubtotal,
       taxAmount: itemTax,
       total: itemTotal,
@@ -75,12 +99,13 @@ export async function createPurchaseOrder(formData: FormData) {
       totalAmount,
       notes,
       items: {
-        create: calculatedItems.map((item: any) => ({
+        create: calculatedItems.map((item) => ({
+          itemId: item.itemId || null,
           description: item.description,
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
-          discount: parseFloat(item.discount),
-          taxRate: parseFloat(item.taxRate),
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount,
+          taxRate: item.taxRate,
           subtotal: item.subtotal,
           taxAmount: item.taxAmount,
           total: item.total,
@@ -96,14 +121,22 @@ export async function createPurchaseOrder(formData: FormData) {
 }
 
 export async function updatePurchaseOrderStatus(formData: FormData) {
-  const { organization, user } = await requireCurrentOrganization()
-
-  if (!user.permissions.includes("arap")) {
-    throw new Error("Anda tidak memiliki izin untuk mengubah status Purchase Order.")
-  }
+  const { organization } = await requireWritableModuleAccess("arap")
 
   const id = formData.get("id") as string
   const status = formData.get("status") as string
+
+  const current = await prisma.purchaseOrder.findFirst({
+    where: { id, organizationId: organization.id },
+    select: { id: true, status: true },
+  })
+  if (!current) {
+    throw new Error("Purchase Order tidak ditemukan.")
+  }
+
+  if (status === "SENT" && current.status !== "APPROVED") {
+    throw new Error("PO harus disetujui (APPROVED) sebelum dikirim (SENT).")
+  }
 
   const po = await prisma.purchaseOrder.update({
     where: { id },
@@ -115,8 +148,111 @@ export async function updatePurchaseOrderStatus(formData: FormData) {
   return { success: true, po }
 }
 
+export async function submitPurchaseOrderForApproval(poId: string) {
+  const { organization, user } = await requireWritableModuleAccess("arap")
+
+  await prisma.$transaction(async (tx) => {
+    const po = await tx.purchaseOrder.findFirst({
+      where: { id: poId, organizationId: organization.id },
+      select: { id: true, status: true },
+    })
+    if (!po) throw new Error("Purchase Order tidak ditemukan.")
+    if (po.status !== "DRAFT") throw new Error("Hanya PO DRAFT yang bisa diajukan approval.")
+
+    await createApprovalRequestInTx(tx, {
+      organizationId: organization.id,
+      entityType: "PurchaseOrder",
+      entityId: po.id,
+      requestedBy: user.id,
+    })
+
+    await tx.purchaseOrder.update({
+      where: { id: po.id },
+      data: { status: "PENDING_APPROVAL" },
+    })
+  })
+
+  revalidatePath("/po")
+  revalidatePath("/arap")
+  return { success: true }
+}
+
+export async function approvePurchaseOrder(poId: string, note?: string) {
+  const { organization, user } = await requireModuleAccess("arap")
+  assertApproverRole(user.role)
+
+  await prisma.$transaction(async (tx) => {
+    const po = await tx.purchaseOrder.findFirst({
+      where: { id: poId, organizationId: organization.id },
+      select: { id: true, status: true },
+    })
+    if (!po) throw new Error("Purchase Order tidak ditemukan.")
+    if (po.status !== "PENDING_APPROVAL") throw new Error("PO tidak dalam status PENDING_APPROVAL.")
+
+    const req = await getPendingApprovalRequestByEntityInTx(tx, {
+      organizationId: organization.id,
+      entityType: "PurchaseOrder",
+      entityId: po.id,
+    })
+    if (!req) throw new Error("Approval request tidak ditemukan.")
+
+    await resolveApprovalRequestInTx(tx, {
+      requestId: req.id,
+      decision: "APPROVE",
+      decidedBy: user.id,
+      note: note || null,
+    })
+
+    await tx.purchaseOrder.update({
+      where: { id: po.id },
+      data: { status: "APPROVED" },
+    })
+  })
+
+  revalidatePath("/po")
+  revalidatePath("/arap")
+  return { success: true }
+}
+
+export async function rejectPurchaseOrder(poId: string, note?: string) {
+  const { organization, user } = await requireModuleAccess("arap")
+  assertApproverRole(user.role)
+
+  await prisma.$transaction(async (tx) => {
+    const po = await tx.purchaseOrder.findFirst({
+      where: { id: poId, organizationId: organization.id },
+      select: { id: true, status: true },
+    })
+    if (!po) throw new Error("Purchase Order tidak ditemukan.")
+    if (po.status !== "PENDING_APPROVAL") throw new Error("PO tidak dalam status PENDING_APPROVAL.")
+
+    const req = await getPendingApprovalRequestByEntityInTx(tx, {
+      organizationId: organization.id,
+      entityType: "PurchaseOrder",
+      entityId: po.id,
+    })
+    if (!req) throw new Error("Approval request tidak ditemukan.")
+
+    await resolveApprovalRequestInTx(tx, {
+      requestId: req.id,
+      decision: "REJECT",
+      decidedBy: user.id,
+      note: note || null,
+    })
+
+    await tx.purchaseOrder.update({
+      where: { id: po.id },
+      data: { status: "REJECTED" },
+    })
+  })
+
+  revalidatePath("/po")
+  revalidatePath("/arap")
+  return { success: true }
+}
+
 export async function getPurchaseOrders() {
-  const { organization } = await requireCurrentOrganization()
+  const { organization } = await requireModuleAccess("arap")
 
   const pos = await prisma.purchaseOrder.findMany({
     where: { organizationId: organization.id },
@@ -128,7 +264,7 @@ export async function getPurchaseOrders() {
 }
 
 export async function getPurchaseOrderById(id: string) {
-  const { organization } = await requireCurrentOrganization()
+  const { organization } = await requireModuleAccess("arap")
 
   const po = await prisma.purchaseOrder.findFirst({
     where: { id, organizationId: organization.id },
@@ -140,4 +276,71 @@ export async function getPurchaseOrderById(id: string) {
   }
 
   return { success: true, po }
+}
+
+export async function receivePurchaseOrder(poId: string, receivedItems: Array<{ poItemId: string; quantity: number; warehouseId: string }>) {
+  // Validasi RBAC untuk penerimaan barang ke gudang
+  const { organization, user } = await requireWritableModuleAccess("warehouse")
+
+  await prisma.$transaction(async (tx) => {
+    const po = await tx.purchaseOrder.findFirst({
+      where: { id: poId, organizationId: organization.id },
+      include: { items: true },
+    })
+
+    if (!po) throw new Error("Purchase Order tidak ditemukan.")
+    if (!["APPROVED", "SENT", "PARTIALLY_RECEIVED"].includes(po.status)) {
+      throw new Error("Status PO tidak valid untuk penerimaan barang.")
+    }
+
+    for (const receipt of receivedItems) {
+      const item = po.items.find((i) => i.id === receipt.poItemId)
+      if (!item) throw new Error(`Item PO dengan ID ${receipt.poItemId} tidak ditemukan.`)
+      if (!item.itemId) throw new Error(`Item "${item.description}" tidak memiliki relasi ke Master Barang (InventoryItem).`)
+
+      const receivedQty = Number(receipt.quantity)
+      if (receivedQty <= 0) throw new Error(`Kuantitas penerimaan untuk "${item.description}" harus lebih dari 0.`)
+
+      // Update qty diterima di PO Item
+      const newReceivedQty = Number(item.receivedQty) + receivedQty
+      if (newReceivedQty > Number(item.quantity)) {
+        throw new Error(`Kuantitas penerimaan total melebihi pesanan untuk item "${item.description}".`)
+      }
+
+      await tx.purchaseOrderItem.update({
+        where: { id: item.id },
+        data: { receivedQty: newReceivedQty },
+      })
+
+      // Buat mutasi persediaan masuk (IN) ke Gudang (Warehouse) melalui Immutable Ledger
+      await postInventoryMovementInTx(tx, {
+        organizationId: organization.id,
+        itemId: item.itemId,
+        movementType: "IN",
+        quantity: receivedQty,
+        unitCost: Number(item.unitPrice),
+        reference: po.poNumber,
+        description: `Penerimaan barang dari PO ${po.poNumber}`,
+        toWarehouseId: receipt.warehouseId,
+        performedBy: user.id,
+      })
+    }
+
+    // Cek apakah semua item sudah diterima penuh
+    const updatedItems = await tx.purchaseOrderItem.findMany({
+      where: { purchaseOrderId: po.id },
+    })
+
+    const isFullyReceived = updatedItems.every((i) => Number(i.receivedQty) >= Number(i.quantity))
+
+    // Update status PO
+    await tx.purchaseOrder.update({
+      where: { id: po.id },
+      data: { status: isFullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED" },
+    })
+  })
+
+  revalidatePath("/po")
+  revalidatePath("/inventory")
+  return { success: true }
 }

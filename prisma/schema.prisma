@@ -134,6 +134,7 @@ model Organization {
   divisions             Division[]
   attendanceRecords     AttendanceRecord[]
   facilityMaintenances  FacilityMaintenance[]
+ inventoryAccountingConfig InventoryAccountingConfig?
 }
 
 // Paket berlangganan (dikelola platform admin)
@@ -177,6 +178,11 @@ model ChartOfAccount {
   investment           Investment? // Relasi 1-to-1: 1 Akun bisa jadi 1 investasi
   journalItems         TransactionLine[]
   budgetItemsAsAccount BudgetItem[]      @relation("BudgetItemAccount")
+  configAsInventory         InventoryAccountingConfig[] @relation("ConfigInventoryAccount")
+  configAsWip               InventoryAccountingConfig[] @relation("ConfigWipAccount")
+  configAsFinishedGoods     InventoryAccountingConfig[] @relation("ConfigFinishedGoodsAccount")
+  configAsVariance          InventoryAccountingConfig[] @relation("ConfigVarianceAccount")
+  configAsCogs              InventoryAccountingConfig[] @relation("ConfigCogsAccount")
 }
 
 // 4. Tabel Rekening Bank (Buku Pembantu Bank)
@@ -750,8 +756,10 @@ model PurchaseOrder {
 model PurchaseOrderItem {
   id              String  @id @default(uuid())
   purchaseOrderId String
+  itemId          String? // Relasi ke master barang di Inventory
   description     String
   quantity        Decimal @db.Decimal(10, 2)
+  receivedQty     Decimal @default(0) @db.Decimal(10, 2) // Qty yang sudah diterima (GRN)
   unitPrice       Decimal @db.Decimal(20, 2)
   discount        Decimal @default(0) @db.Decimal(20, 2)
   taxRate         Decimal @default(0) @db.Decimal(5, 2)
@@ -760,8 +768,10 @@ model PurchaseOrderItem {
   total           Decimal @db.Decimal(20, 2)
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item          InventoryItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
 
   @@index([purchaseOrderId])
+  @@index([itemId])
 }
 
 // Bank Reconciliation Model
@@ -1091,6 +1101,7 @@ model InventoryItem {
   bomAsProduct         BillOfMaterial[]         @relation("BomProductItem")
   bomAsComponent       BillOfMaterialLine[]     @relation("BomComponentItem")
   workOrderItems       WorkOrderItem[]          @relation("WorkOrderItemInventory")
+  purchaseOrderItems   PurchaseOrderItem[]
   issuedToWorkOrders   WorkOrderMaterialIssue[] @relation("WorkOrderIssueInventory")
   producedByWorkOrders WorkOrder[]              @relation("WorkOrderProductItem")
 
@@ -1550,4 +1561,23 @@ model Division {
   @@index([parentId])
   @@index([managerId])
   @@index([status])
+}
+
+model InventoryAccountingConfig {
+  id                         String   @id @default(uuid())
+  organizationId             String   @unique
+  inventoryAccountId         String?
+  wipAccountId               String?
+  finishedGoodsAccountId     String?
+  inventoryVarianceAccountId String?
+  cogsAccountId              String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  organization               Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inventoryAccount           ChartOfAccount?  @relation("ConfigInventoryAccount", fields: [inventoryAccountId], references: [id])
+  wipAccount                 ChartOfAccount?  @relation("ConfigWipAccount", fields: [wipAccountId], references: [id])
+  finishedGoodsAccount       ChartOfAccount?  @relation("ConfigFinishedGoodsAccount", fields: [finishedGoodsAccountId], references: [id])
+  inventoryVarianceAccount   ChartOfAccount?  @relation("ConfigVarianceAccount", fields: [inventoryVarianceAccountId], references: [id])
+  cogsAccount                ChartOfAccount?  @relation("ConfigCogsAccount", fields: [cogsAccountId], references: [id])
 }

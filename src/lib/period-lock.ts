@@ -1,4 +1,5 @@
-import { prisma } from './prisma'
+import type { Prisma } from "@prisma/client"
+import { prisma } from "./prisma"
 
 export interface PeriodLockInput {
   organizationId: string
@@ -13,18 +14,18 @@ export interface PeriodLockInput {
 /**
  * Cek apakah period tertentu terkunci
  */
-export async function isPeriodLocked(
+export async function isPeriodLockedInTx(
+  tx: Pick<Prisma.TransactionClient, "periodLock">,
   organizationId: string,
-  date: Date
-): Promise<{ locked: boolean; lockInfo?: any }> {
+  date: Date,
+): Promise<{ locked: boolean; lockInfo?: unknown }> {
   const year = date.getFullYear()
   const month = date.getMonth() + 1
 
-  // Cek lock full (semua period)
-  const fullLock = await prisma.periodLock.findFirst({
+  const fullLock = await tx.periodLock.findFirst({
     where: {
       organizationId,
-      lockType: 'FULL',
+      lockType: "FULL",
       isLocked: true,
     },
   })
@@ -33,12 +34,11 @@ export async function isPeriodLocked(
     return { locked: true, lockInfo: fullLock }
   }
 
-  // Cek lock tahun
-  const yearLock = await prisma.periodLock.findFirst({
+  const yearLock = await tx.periodLock.findFirst({
     where: {
       organizationId,
       year,
-      lockType: 'YEAR',
+      lockType: "YEAR",
       isLocked: true,
     },
   })
@@ -47,13 +47,12 @@ export async function isPeriodLocked(
     return { locked: true, lockInfo: yearLock }
   }
 
-  // Cek lock per bulan
-  const monthLock = await prisma.periodLock.findFirst({
+  const monthLock = await tx.periodLock.findFirst({
     where: {
       organizationId,
       year,
       month,
-      lockType: 'PERIOD',
+      lockType: "PERIOD",
       isLocked: true,
     },
   })
@@ -63,6 +62,13 @@ export async function isPeriodLocked(
   }
 
   return { locked: false }
+}
+
+export async function isPeriodLocked(
+  organizationId: string,
+  date: Date
+): Promise<{ locked: boolean; lockInfo?: unknown }> {
+  return isPeriodLockedInTx(prisma, organizationId, date)
 }
 
 /**

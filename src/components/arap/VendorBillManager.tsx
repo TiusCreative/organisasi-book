@@ -4,10 +4,12 @@ import { useState, useEffect } from "react"
 import { Plus, DollarSign } from "lucide-react"
 import { getVendorBills, createVendorBill, updateVendorBill, addVendorBillPayment } from "../../app/actions/invoice"
 import { getSuppliers } from "../../app/actions/arap"
+import { getChartOfAccounts } from "../../app/actions/accounting"
 
 export default function VendorBillManager({ organizationId }: { organizationId: string }) {
   const [vendorBills, setVendorBills] = useState<any[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
+  const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -242,6 +244,28 @@ export default function VendorBillManager({ organizationId }: { organizationId: 
                   <option value="TRANSFER">Transfer</option>
                   <option value="CASH">Cash</option>
                   <option value="CHECK">Check</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Akun Pengeluaran (Kas/Bank) - Kredit</label>
+                <select
+                  name="cashAccountId"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">Pilih Akun Kas/Bank</option>
+                  {accounts.filter(a => a.type === "Asset").map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Akun Hutang Usaha - Debit</label>
+                <select
+                  name="apAccountId"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">Pilih Akun Hutang</option>
+                  {accounts.filter(a => a.type === "Liability").map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
                 </select>
               </div>
               <div className="flex gap-2">

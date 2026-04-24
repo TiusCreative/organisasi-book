@@ -1,132 +1,56 @@
 "use server"
 
+import { prisma } from "@/lib/prisma"
+import { requireWritableModuleAccess, requireModuleAccess } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
-import { requireCurrentOrganization } from "../../lib/auth"
-import { lockPeriod, unlockPeriod, getPeriodLocks, getLockedPeriods } from "../../lib/period-lock"
-import { logAudit } from "../../lib/audit-logger"
 
-/**
- * Lock period - hanya admin yang bisa lock
- */
-export async function lockPeriodAction(formData: FormData) {
-  const { user, organization } = await requireCurrentOrganization()
-
-  if (user.role !== "ADMIN") {
-    return { success: false, error: "Hanya admin yang bisa mengunci period." }
-  }
-
-  const year = parseInt(formData.get("year") as string)
-  const monthValue = formData.get("month") as string
-  const month = monthValue ? parseInt(monthValue) : undefined
-  const lockType = (formData.get("lockType") as string) || "PERIOD"
-  const reason = formData.get("reason") as string
-
-  if (!year || isNaN(year)) {
-    return { success: false, error: "Tahun tidak valid" }
-  }
-
-  if (lockType === "PERIOD" && !month) {
-    return { success: false, error: "Bulan wajib diisi untuk lock per period" }
-  }
-
+export async function getPeriodLocks() {
   try {
-    await lockPeriod({
-      organizationId: organization.id,
-      year,
-      month: month || undefined,
-      lockType: lockType as "PERIOD" | "YEAR" | "FULL",
-      lockedBy: user.id,
-      lockedByName: user.name,
-      reason,
+    const { organization } = await requireModuleAccess("accounting" as any)
+    const locks = await prisma.periodLock.findMany({
+      where: { organizationId: organization.id },
+      orderBy: [{ year: "desc" }, { month: "desc" }]
     })
-
-    await logAudit({
-      organizationId: organization.id,
-      action: "CREATE",
-      entity: "PeriodLock",
-      entityId: `${year}-${month || 'FULL'}`,
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
-      newData: { year, month, lockType, reason },
-    })
-
-    revalidatePath("/pengaturan")
-    return { success: true }
-  } catch (error) {
-    console.error("Lock period error:", error)
-    return { success: false, error: "Gagal mengunci period" }
+    return { success: true, locks }
+  } catch (error: any) {
+    return { success: false, error: error.message }
   }
 }
 
-/**
- * Unlock period - hanya admin yang bisa unlock
- */
-export async function unlockPeriodAction(formData: FormData) {
-  const { user, organization } = await requireCurrentOrganization()
-
-  if (user.role !== "ADMIN") {
-    return { success: false, error: "Hanya admin yang bisa membuka period." }
-  }
-
-  const year = parseInt(formData.get("year") as string)
-  const monthValue = formData.get("month") as string
-  const month = monthValue ? parseInt(monthValue) : null
-  const unlockReason = formData.get("unlockReason") as string
-
-  if (!year || isNaN(year)) {
-    return { success: false, error: "Tahun tidak valid" }
-  }
-
+export async function lockPeriod(formData: FormData) {
   try {
-    await unlockPeriod(
-      organization.id,
-      year,
-      month,
-      user.id,
-      user.name,
-      unlockReason
-    )
+    // Hanya ADMIN/MANAGER Akuntansi yang boleh tutup buku
+    const { organization, user } = await requireWritableModuleAccess("accounting" as any)
+    
+    const year = parseInt(formData.get("year") as string)
+    const month = parseInt(formData.get("month") as string)
+    const reason = formData.get("reason") as string
 
-    await logAudit({
-      organizationId: organization.id,
-      action: "UPDATE",
-      entity: "PeriodLock",
-      entityId: `${year}-${month || 'FULL'}`,
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
-      newData: { year, month, unlocked: true, reason: unlockReason },
+    const lock = await prisma.periodLock.upsert({
+      where: {
+        organizationId_year_month: { organizationId: organization.id, year, month }
+      },
+      update: {
+        isLocked: true,
+        lockedAt: new Date(),
+        lockedBy: user.id,
+        lockedByName: user.name,
+        reason
+      },
+      create: {
+        organizationId: organization.id,
+        year,
+        month,
+        isLocked: true,
+        lockedBy: user.id,
+        lockedByName: user.name,
+        reason
+      }
     })
 
-    revalidatePath("/pengaturan")
-    return { success: true }
-  } catch (error) {
-    console.error("Unlock period error:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Gagal membuka period" }
+    revalidatePath(`/organization/${organization.id}/accounting/period-lock`)
+    return { success: true, lock }
+  } catch (error: any) {
+    return { success: false, error: error.message || "Gagal mengunci periode." }
   }
-}
-
-/**
- * Get all period locks
- */
-export async function getPeriodLocksAction() {
-  const { user, organization } = await requireCurrentOrganization()
-
-  if (user.role !== "ADMIN") {
-    return { success: false, error: "Hanya admin yang bisa melihat period locks." }
-  }
-
-  const locks = await getPeriodLocks(organization.id)
-  return { success: true, locks }
-}
-
-/**
- * Get only locked periods
- */
-export async function getLockedPeriodsAction() {
-  const { user, organization } = await requireCurrentOrganization()
-
-  const locks = await getLockedPeriods(organization.id)
-  return { success: true, locks }
 }

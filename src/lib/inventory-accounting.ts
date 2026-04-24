@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client"
+import { createJournalInTx as createAccountingJournalInTx } from "@/lib/accounting/journal"
 import { ensureInventoryAccountingSchema } from "@/lib/inventory-accounting-schema"
 
 export type InventoryAccountingConfigRow = {
@@ -65,28 +66,16 @@ export async function createJournalInTx(
     }>
   },
 ) {
-  const date = input.date || new Date()
-  const header = await tx.transaction.create({
-    data: {
-      organizationId: input.organizationId,
-      date,
-      description: input.description,
-      reference: input.reference || null,
+  return createAccountingJournalInTx(tx, {
+    organizationId: input.organizationId,
+    date: input.date,
+    description: input.description,
+    reference: input.reference || null,
+    lines: input.lines,
+    audit: {
+      entity: "InventoryJournal",
     },
-    select: { id: true },
   })
-
-  await tx.transactionLine.createMany({
-    data: input.lines.map((line) => ({
-      transactionId: header.id,
-      accountId: line.accountId,
-      debit: Number(line.debit || 0),
-      credit: Number(line.credit || 0),
-      description: line.description || null,
-    })),
-  })
-
-  return { transactionId: header.id }
 }
 
 export async function postWorkOrderIssueMaterialJournalInTx(

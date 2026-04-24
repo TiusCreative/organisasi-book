@@ -1,137 +1,88 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import { requireModuleAccess } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
-import { requireCurrentOrganization } from "@/lib/auth"
-import { hasModulePermission } from "@/lib/permissions"
-import type { Prisma } from "@prisma/client"
-
-async function generateNextWarehouseCode(tx: Prisma.TransactionClient, orgId: string) {
-  const existingWarehouses = await tx.warehouse.findMany({
-    where: { organizationId: orgId },
-    select: { code: true },
-    orderBy: { code: 'desc' },
-    take: 1
-  })
-
-  if (existingWarehouses.length === 0) {
-    return "WH-001"
-  }
-
-  const lastCode = existingWarehouses[0].code
-  const lastNumber = parseInt(lastCode.split("-")[1])
-  const nextNumber = lastNumber + 1
-  return `WH-${String(nextNumber).padStart(3, '0')}`
-}
 
 export async function getWarehouses() {
-  const { organization } = await requireCurrentOrganization()
-  
-  return await prisma.warehouse.findMany({
-    where: { organizationId: organization.id },
-    include: {
-      manager: {
-        select: { id: true, name: true, email: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  })
+  try {
+    const { organization } = await requireModuleAccess("warehouse")
+    
+    const warehouses = await prisma.warehouse.findMany({
+      where: { organizationId: organization.id, status: "ACTIVE" },
+      orderBy: { name: "asc" }
+    })
+    return { success: true, warehouses }
+  } catch (error) {
+    return { success: false, warehouses: [] }
+  }
+}
+
+export async function getInventoryMovements(filters?: { type?: string; itemId?: string }) {
+  try {
+    const { organization } = await requireModuleAccess("warehouse")
+    
+    const whereClause: any = { organizationId: organization.id }
+    if (filters?.type) whereClause.movementType = filters.type
+    if (filters?.itemId) whereClause.itemId = filters.itemId
+
+    const movements = await prisma.inventoryMovement.findMany({
+      where: whereClause,
+      include: { item: true },
+      orderBy: { createdAt: "desc" },
+    })
+    return { success: true, movements }
+  } catch (error) {
+    return { success: false, movements: [] }
+  }
 }
 
 export async function createWarehouse(formData: FormData) {
-  const { user, organization } = await requireCurrentOrganization()
-
-  if (!hasModulePermission(user, "warehouse")) {
-    throw new Error("Anda tidak memiliki izin untuk membuat gudang")
-  }
-
+  const { organization } = await requireModuleAccess("warehouse" as any)
+  
   const name = formData.get("name") as string
   const location = formData.get("location") as string
-  const type = formData.get("type") as string || "MAIN"
-  const managerId = formData.get("managerId") as string
+  const type = formData.get("type") as string
+  const managerId = (formData.get("managerId") as string) || null
+  const status = formData.get("status") as string
   const notes = formData.get("notes") as string
+  
+  const count = await prisma.warehouse.count({ where: { organizationId: organization.id } })
+  const code = `WH-${String(count + 1).padStart(3, "0")}`
 
-  if (!name) {
-    throw new Error("Nama gudang wajib diisi")
-  }
-
-  await prisma.$transaction(async (tx) => {
-    const code = await generateNextWarehouseCode(tx, organization.id)
-
-    await tx.warehouse.create({
-      data: {
-        organizationId: organization.id,
-        code,
-        name,
-        location,
-        type,
-        managerId,
-        notes
-      }
-    })
+  const warehouse = await prisma.warehouse.create({
+    data: { organizationId: organization.id, code, name, location, type, managerId, status, notes }
   })
-
+  
   revalidatePath("/warehouse")
-  revalidatePath("/inventory")
-  revalidatePath("/dashboard")
+  return { success: true, warehouse }
 }
 
 export async function updateWarehouse(formData: FormData) {
-  const { user, organization } = await requireCurrentOrganization()
-
-  if (!hasModulePermission(user, "warehouse")) {
-    throw new Error("Anda tidak memiliki izin untuk mengedit gudang")
-  }
-
+  const { organization } = await requireModuleAccess("warehouse" as any)
+  
   const id = formData.get("id") as string
   const name = formData.get("name") as string
   const location = formData.get("location") as string
   const type = formData.get("type") as string
-  const managerId = formData.get("managerId") as string
+  const managerId = (formData.get("managerId") as string) || null
   const status = formData.get("status") as string
   const notes = formData.get("notes") as string
 
-  if (!id || !name) {
-    throw new Error("Data tidak lengkap")
-  }
-
-  const updated = await prisma.warehouse.updateMany({
+  const warehouse = await prisma.warehouse.update({
     where: { id, organizationId: organization.id },
-    data: {
-      name,
-      location,
-      type,
-      managerId,
-      status,
-      notes
-    }
+    data: { name, location, type, managerId, status, notes }
   })
-
-  if (updated.count === 0) {
-    throw new Error("Gudang tidak ditemukan atau bukan milik organisasi aktif")
-  }
-
+  
   revalidatePath("/warehouse")
-  revalidatePath("/inventory")
-  revalidatePath("/dashboard")
+  return { success: true, warehouse }
 }
 
 export async function deleteWarehouse(id: string) {
-  const { user, organization } = await requireCurrentOrganization()
-
-  if (!hasModulePermission(user, "warehouse")) {
-    throw new Error("Anda tidak memiliki izin untuk menghapus gudang")
-  }
-
-  const deleted = await prisma.warehouse.deleteMany({
-    where: { id, organizationId: organization.id }
-  })
-
-  if (deleted.count === 0) {
-    throw new Error("Gudang tidak ditemukan atau bukan milik organisasi aktif")
-  }
-
+  const { organization } = await requireModuleAccess("warehouse" as any)
+  
+  await prisma.warehouse.delete({ where: { id, organizationId: organization.id } })
+  
   revalidatePath("/warehouse")
-  revalidatePath("/inventory")
-  revalidatePath("/dashboard")
+  return { success: true }
 }

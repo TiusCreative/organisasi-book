@@ -1,18 +1,65 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Plus, Share2, Download, FileText } from "lucide-react"
-import { getPurchaseOrders, createPurchaseOrder, updatePurchaseOrderStatus } from "../../app/actions/purchase-order"
+import { Plus, Share2, Download, FileText, Trash2, Check, X } from "lucide-react"
+import {
+  getPurchaseOrders,
+  createPurchaseOrder,
+  updatePurchaseOrderStatus,
+  submitPurchaseOrderForApproval,
+  approvePurchaseOrder,
+  rejectPurchaseOrder,
+} from "../../app/actions/purchase-order"
 import { getSuppliers, createSupplier } from "../../app/actions/arap"
+import { getWarehouses } from "../../app/actions/warehouse"
+import ReceivePurchaseOrderModal from "./ReceivePurchaseOrderModal"
 
-export default function PurchaseOrderManager({ organizationId }: { organizationId: string }) {
-  const [pos, setPos] = useState<any[]>([])
-  const [suppliers, setSuppliers] = useState<any[]>([])
+type Supplier = {
+  id: string
+  name: string
+  phone?: string | null
+  address?: string | null
+}
+
+type PurchaseOrderItemInput = {
+  description: string
+  quantity: number
+  unitPrice: number
+  discount: number
+  taxRate: number
+}
+
+type PurchaseOrderItemRow = {
+  id: string
+  description: string
+  quantity: number
+  unitPrice: string | number
+  total: string | number
+}
+
+type PurchaseOrderRow = {
+  id: string
+  poNumber: string
+  orderDate: string | Date
+  status: string
+  totalAmount: string | number
+  supplier?: Supplier | null
+  items?: PurchaseOrderItemRow[]
+}
+
+export default function PurchaseOrderManager({ organizationId: _organizationId }: { organizationId: string }) {
+  void _organizationId
+  const [pos, setPos] = useState<PurchaseOrderRow[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [warehouses, setWarehouses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showSupplierModal, setShowSupplierModal] = useState(false)
-  const [selectedPO, setSelectedPO] = useState<any>(null)
-  const [items, setItems] = useState([{ description: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 11 }])
+  const [showReceiveModal, setShowReceiveModal] = useState(false)
+  const [selectedPO, setSelectedPO] = useState<PurchaseOrderRow | null>(null)
+  const [items, setItems] = useState<PurchaseOrderItemInput[]>([
+    { description: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 11 },
+  ])
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -21,12 +68,14 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
 
   const loadData = async () => {
     setLoading(true)
-    const [posResult, suppliersResult] = await Promise.all([
+    const [posResult, suppliersResult, warehousesResult] = await Promise.all([
       getPurchaseOrders(),
       getSuppliers(),
+      getWarehouses(),
     ])
     if (posResult.success) setPos(posResult.purchaseOrders)
     if (suppliersResult.success) setSuppliers(suppliersResult.suppliers)
+    if (warehousesResult?.success) setWarehouses(warehousesResult.warehouses)
     setLoading(false)
   }
 
@@ -38,9 +87,9 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
     setItems(items.filter((_, i) => i !== index))
   }
 
-  const handleItemChange = (index: number, field: string, value: any) => {
+  const handleItemChange = (index: number, field: keyof PurchaseOrderItemInput, value: PurchaseOrderItemInput[keyof PurchaseOrderItemInput]) => {
     const newItems = [...items]
-    newItems[index][field] = value
+    newItems[index] = { ...newItems[index], [field]: value } as PurchaseOrderItemInput
     setItems(newItems)
   }
 
@@ -64,7 +113,7 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
     loadData()
   }
 
-  const handleShareWhatsApp = (po: any) => {
+  const handleShareWhatsApp = (po: PurchaseOrderRow) => {
     const supplier = po.supplier
     const message = `*PURCHASE ORDER*\n\nNomor: ${po.poNumber}\nTanggal: ${new Date(po.orderDate).toLocaleDateString("id-ID")}\nTotal: Rp ${po.totalAmount.toLocaleString("id-ID")}\n\nMohon konfirmasi pesanan ini.`
     
@@ -76,7 +125,7 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
     }
   }
 
-  const handleDownloadPDF = (po: any) => {
+  const handleDownloadPDF = (po: PurchaseOrderRow) => {
     setSelectedPO(po)
     setTimeout(() => {
       window.print()
@@ -124,6 +173,9 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                       po.status === "DRAFT" ? "bg-slate-100 text-slate-800" :
+                      po.status === "PENDING_APPROVAL" ? "bg-amber-100 text-amber-800" :
+                      po.status === "APPROVED" ? "bg-emerald-100 text-emerald-800" :
+                      po.status === "REJECTED" ? "bg-red-100 text-red-800" :
                       po.status === "SENT" ? "bg-blue-100 text-blue-800" :
                       po.status === "RECEIVED" ? "bg-green-100 text-green-800" :
                       "bg-red-100 text-red-800"
@@ -136,7 +188,7 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
                   {new Date(po.orderDate).toLocaleDateString("id-ID")}
                 </div>
                 <div className="text-sm font-medium text-slate-800">
-                  Total: {formatCurrency(parseFloat(po.totalAmount))}
+                  Total: {formatCurrency(Number(po.totalAmount || 0))}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -157,14 +209,65 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
                 {po.status === "DRAFT" && (
                   <button
                     onClick={() => {
+                      submitPurchaseOrderForApproval(po.id).then(loadData).catch((e) => alert(e?.message || String(e)))
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-sm font-bold text-amber-700 hover:bg-amber-50"
+                    title="Ajukan approval"
+                  >
+                    Ajukan
+                  </button>
+                )}
+
+                {po.status === "PENDING_APPROVAL" && (
+                  <>
+                    <button
+                      onClick={() => {
+                        const note = window.prompt("Catatan approval (opsional):") || ""
+                        approvePurchaseOrder(po.id, note).then(loadData).catch((e) => alert(e?.message || String(e)))
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50"
+                      title="Approve"
+                    >
+                      <Check size={16} />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        const note = window.prompt("Alasan reject (opsional):") || ""
+                        rejectPurchaseOrder(po.id, note).then(loadData).catch((e) => alert(e?.message || String(e)))
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold text-red-700 hover:bg-red-50"
+                      title="Reject"
+                    >
+                      <X size={16} />
+                      Reject
+                    </button>
+                  </>
+                )}
+
+                {po.status === "APPROVED" && (
+                  <button
+                    onClick={() => {
                       const formData = new FormData()
                       formData.append("id", po.id)
                       formData.append("status", "SENT")
-                      updatePurchaseOrderStatus(formData).then(loadData)
+                      updatePurchaseOrderStatus(formData).then(loadData).catch((e) => alert(e?.message || String(e)))
                     }}
                     className="rounded-lg px-3 py-1.5 text-sm font-bold text-blue-600 hover:bg-blue-50"
                   >
                     Kirim
+                  </button>
+                )}
+
+                {(po.status === "APPROVED" || po.status === "SENT" || po.status === "PARTIALLY_RECEIVED") && (
+                  <button
+                    onClick={() => {
+                      setSelectedPO(po)
+                      setShowReceiveModal(true)
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-sm font-bold text-purple-600 hover:bg-purple-50"
+                  >
+                    Terima
                   </button>
                 )}
               </div>
@@ -256,7 +359,7 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
                         onClick={() => handleRemoveItem(index)}
                         className="rounded-lg p-2 text-red-600 hover:bg-red-50"
                       >
-                        <Download size={16} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   ))}
@@ -385,23 +488,37 @@ export default function PurchaseOrderManager({ organizationId }: { organizationI
                   <th className="text-right py-2">Total</th>
                 </tr>
               </thead>
-              <tbody>
-                {selectedPO.items.map((item: any) => (
+                <tbody>
+                {(selectedPO.items || []).map((item) => (
                   <tr key={item.id} className="border-b">
                     <td className="py-2">{item.description}</td>
                     <td className="text-right py-2">{item.quantity}</td>
-                    <td className="text-right py-2">{formatCurrency(parseFloat(item.unitPrice))}</td>
-                    <td className="text-right py-2">{formatCurrency(parseFloat(item.total))}</td>
+                    <td className="text-right py-2">{formatCurrency(Number(item.unitPrice || 0))}</td>
+                    <td className="text-right py-2">{formatCurrency(Number(item.total || 0))}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div className="text-right">
-              <p className="font-bold">Total: {formatCurrency(parseFloat(selectedPO.totalAmount))}</p>
+              <p className="font-bold">Total: {formatCurrency(Number(selectedPO.totalAmount || 0))}</p>
             </div>
           </div>
         )}
       </div>
+
+      {/* Receive Purchase Order (GRN) Modal */}
+      {showReceiveModal && selectedPO && (
+        <ReceivePurchaseOrderModal
+          isOpen={showReceiveModal}
+          onClose={() => {
+            setShowReceiveModal(false)
+            setSelectedPO(null)
+            loadData() // Reload POs list after receiving goods
+          }}
+          po={selectedPO as any}
+          warehouses={warehouses}
+        />
+      )}
     </div>
   )
 }
