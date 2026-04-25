@@ -95,13 +95,6 @@ export default function DocumentTemplateSettings() {
             </select>
           </div>
 
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-            <p className="text-xs font-bold text-slate-600 mb-1 flex items-center gap-1"><Code size={14} /> Variabel Tersedia (Gunakan format {{}}):</p>
-            <div className="text-xs text-blue-600 whitespace-pre-wrap break-words">
-              {String(activeDocMeta?.variables || "Tidak ada variabel")}
-            </div>
-          </div>
-
           <textarea
             value={htmlContent}
             onChange={(e) => setHtmlContent(e.target.value)}
