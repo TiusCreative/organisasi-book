@@ -1,9 +1,10 @@
-import { Settings, Download, DollarSign, ArrowLeft } from "lucide-react"
+import { Settings, Download, DollarSign, ArrowLeft, FileText } from "lucide-react"
 import OrganizationSettingsForm from "../../components/settings/OrganizationSettingsForm"
 import DatabaseExportImport from "../../components/settings/DatabaseExportImport"
 import DeleteOrganizationButton from "../../components/settings/DeleteOrganizationButton"
 import PeriodLockManager from "../../components/settings/PeriodLockManager"
 import CurrencyManagement from "../../components/settings/CurrencyManagement"
+import DocumentTemplateSettings from "../../components/settings/DocumentTemplateSettings"
 import { requireCurrentOrganization, requireModuleAccess, requireOrganizationAdmin } from "../../lib/auth"
 import Link from "next/link"
 
@@ -70,6 +71,20 @@ export default async function PengaturanPage() {
         </div>
         <CurrencyManagement organizationId={activeOrg.id} />
       </div>
+
+      {/* Document Template Settings - Temporarily disabled due to React error */}
+      {/*
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3 flex-col sm:flex-row">
+          <FileText size={24} className="text-blue-600" />
+          <div>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Template Dokumen</h2>
+            <p className="text-xs sm:text-sm text-slate-500">Desain layout cetak untuk Invoice, PO, DO, dan lainnya</p>
+          </div>
+        </div>
+        <DocumentTemplateSettings />
+      </div>
+      */}
 
       {/* 
       {/* Export/Import */}

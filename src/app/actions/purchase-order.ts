@@ -7,6 +7,7 @@ import { requireModuleAccess, requireWritableModuleAccess } from "@/lib/auth"
 import { createApprovalRequestInTx, getPendingApprovalRequestByEntityInTx, resolveApprovalRequestInTx } from "@/lib/approval-workflow"
 import { revalidatePath } from "next/cache"
 import { postInventoryMovementInTx } from "@/lib/inventory-ledger"
+import { createJournalInTx } from "@/lib/accounting/journal"
 
 type PurchaseOrderItemInput = {
   itemId?: string
@@ -381,26 +382,32 @@ export async function receivePurchaseOrder(
     })
     
     // 3. Create Accounting Journal In Transaction (Otomatis)
-    // Pseudocode terintegrasi (Gunakan util journal akuntansi yang sesuai dengan struktur project Anda):
-    // const landedCostAmount = landedCostData?.amount || 0
-    // await createJournalInTx(tx, {
-    //   organizationId: organization.id,
-    //   date: new Date(),
-    //   reference: po.poNumber,
-    //   description: `GRN untuk PO ${po.poNumber}`,
-    //   lines: [
-    //     // Debit: Persediaan (Nilai Barang + Landed Cost)
-    //     { accountCode: "1130-INVENTORY", debit: totalInventoryDebit, credit: 0 },
-    //     
-    //     // Kredit: Hutang Belum Ditagih / GRNI (Sesuai nilai barang asli)
-    //     { accountCode: "2120-GRNI", debit: 0, credit: totalGrniCredit },
-    //
-    //     // Kredit: Hutang Biaya Ekspedisi/Asuransi (Jika ada Landed Cost)
-    //     ...(landedCostAmount > 0 
-    //         ? [{ accountCode: "2130-ACCRUED-EXPENSE", debit: 0, credit: landedCostAmount }] 
-    //         : [])
-    //   ]
-    // })
+    const accConfig = await tx.accountingConfig.findUnique({
+      where: { organizationId: organization.id }
+    })
+
+    if (!accConfig?.inventoryAccountId) {
+      throw new Error("Akun Persediaan belum diatur di Pengaturan Akuntansi.")
+    }
+
+    const landedCostAmount = landedCostData?.amount || 0
+    const lines = [
+      { accountId: accConfig.inventoryAccountId, debit: totalInventoryDebit, credit: 0, description: `Persediaan dari PO ${po.poNumber}` },
+      { accountId: accConfig.inventoryAccountId, debit: 0, credit: totalGrniCredit, description: `GRNI untuk PO ${po.poNumber}` }
+    ]
+
+    // Jika ada landed cost, kredit ke akun biaya ekspedisi (gunakan akun persediaan sebagai fallback)
+    if (landedCostAmount > 0) {
+      lines.push({ accountId: accConfig.inventoryAccountId, debit: 0, credit: landedCostAmount, description: `Biaya Landed Cost PO ${po.poNumber}` })
+    }
+
+    await createJournalInTx(tx, {
+      organizationId: organization.id,
+      date: new Date(),
+      reference: po.poNumber,
+      description: `GRN untuk PO ${po.poNumber}`,
+      lines
+    })
   })
 
   revalidatePath("/po")
