@@ -186,7 +186,7 @@ export default function DocumentTemplateSettings() {
           <textarea
             value={htmlContent}
             onChange={(e) => setHtmlContent(e.target.value)}
-            className="w-full h-[400px] font-mono text-sm p-4 rounded-lg border border-slate-300 bg-slate-900 text-green-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-[400px] font-mono text-sm p-4 rounded-lg border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading}
           />
 
