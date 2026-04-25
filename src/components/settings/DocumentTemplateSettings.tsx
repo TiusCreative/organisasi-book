@@ -98,12 +98,7 @@ export default function DocumentTemplateSettings() {
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
             <p className="text-xs font-bold text-slate-600 mb-1 flex items-center gap-1"><Code size={14} /> Variabel Tersedia (Gunakan format {{}}):</p>
             <div className="text-xs text-blue-600 whitespace-pre-wrap break-words">
-              {(() => {
-                const vars = activeDocMeta?.variables;
-                if (typeof vars === 'string') return vars;
-                if (typeof vars === 'object' && vars !== null) return JSON.stringify(vars);
-                return "Tidak ada variabel";
-              })()}
+              {String(activeDocMeta?.variables || "Tidak ada variabel")}
             </div>
           </div>
 
