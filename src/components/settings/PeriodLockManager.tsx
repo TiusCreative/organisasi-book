@@ -87,6 +87,7 @@ export default function PeriodLockManager() {
     } else {
       alert(result.error || "Gagal membuka period")
     }
+    */
   }
 
   if (loading) {
