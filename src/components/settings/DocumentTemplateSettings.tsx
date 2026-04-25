@@ -97,7 +97,7 @@ export default function DocumentTemplateSettings() {
 
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
             <p className="text-xs font-bold text-slate-600 mb-1 flex items-center gap-1"><Code size={14} /> Variabel Tersedia (Gunakan format {{}}):</p>
-            <code className="text-xs text-blue-600 break-words">{String(activeDocMeta?.variables || "")}</code>
+            <code className="text-xs text-blue-600 wrap-break-word">{typeof activeDocMeta?.variables === 'string' ? activeDocMeta.variables : String(activeDocMeta?.variables || "")}</code>
           </div>
 
           <textarea

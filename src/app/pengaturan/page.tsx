@@ -72,8 +72,7 @@ export default async function PengaturanPage() {
         <CurrencyManagement organizationId={activeOrg.id} />
       </div>
 
-      {/* Document Template Settings - Temporarily disabled due to React error */}
-      {/*
+      {/* Document Template Settings */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3 flex-col sm:flex-row">
           <FileText size={24} className="text-blue-600" />
@@ -84,7 +83,6 @@ export default async function PengaturanPage() {
         </div>
         <DocumentTemplateSettings />
       </div>
-      */}
 
       {/* 
       {/* Export/Import */}
