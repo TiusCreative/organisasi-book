@@ -36,6 +36,10 @@ export default function ReceivePurchaseOrderModal({ isOpen, onClose, po, warehou
   // State untuk menyimpan input qty dan gudang per item
   const [receiptData, setReceiptData] = useState<Record<string, { quantity: number; warehouseId: string }>>({})
 
+  // State untuk Landed Cost (Biaya Tambahan / Ongkir)
+  const [landedCost, setLandedCost] = useState<number>(0)
+  const [allocationMethod, setAllocationMethod] = useState<'QUANTITY' | 'VALUE'>('QUANTITY')
+
   useEffect(() => {
     if (isOpen) {
       // Inisialisasi state awal: Hanya item yang belum diterima penuh dan memiliki itemId
@@ -54,6 +58,8 @@ export default function ReceivePurchaseOrderModal({ isOpen, onClose, po, warehou
       })
       setReceiptData(initialData)
       setError(null)
+      setLandedCost(0)
+      setAllocationMethod('QUANTITY')
     }
   }, [isOpen, po, warehouses])
 
@@ -92,7 +98,11 @@ export default function ReceivePurchaseOrderModal({ isOpen, onClose, po, warehou
         throw new Error("Pilih minimal satu barang dengan kuantitas lebih dari 0 untuk diterima.")
       }
 
-      const result = await receivePurchaseOrder(po.id, payload)
+      // Mengirimkan payload beserta data Landed Cost ke Server Action
+      const result = await receivePurchaseOrder(po.id, payload, {
+        amount: landedCost,
+        method: allocationMethod
+      })
       if (result.success) {
         onClose()
       } else {
@@ -178,6 +188,36 @@ export default function ReceivePurchaseOrderModal({ isOpen, onClose, po, warehou
               })}
             </tbody>
           </table>
+        </div>
+        
+        {/* Bagian Input Landed Cost */}
+        <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-lg">
+          <h3 className="text-sm font-bold text-gray-700 mb-3">Landed Cost (Biaya Pengiriman/Lainnya)</h3>
+          <div className="flex gap-4 items-end">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Total Biaya Tambahan (Rp)</label>
+              <input
+                type="number"
+                min="0"
+                value={landedCost || ''}
+                onChange={(e) => setLandedCost(Number(e.target.value))}
+                placeholder="0"
+                className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Metode Alokasi</label>
+              <select
+                value={allocationMethod}
+                onChange={(e) => setAllocationMethod(e.target.value as 'QUANTITY' | 'VALUE')}
+                className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="QUANTITY">Kuantitas (Qty)</option>
+                <option value="VALUE">Total Nilai Barang (Value)</option>
+              </select>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">Biaya ini akan didistribusikan secara proporsional untuk menambah HPP (Unit Cost) inventori masuk.</p>
         </div>
 
         <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">

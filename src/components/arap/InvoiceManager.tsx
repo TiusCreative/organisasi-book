@@ -5,6 +5,8 @@ import { Plus, DollarSign, Share2, Download, Printer } from "lucide-react"
 import { getInvoices, createInvoice, updateInvoice, addInvoicePayment } from "../../app/actions/invoice"
 import { getCustomers } from "../../app/actions/arap"
 import { getChartOfAccounts } from "../../app/actions/accounting"
+import { getDocumentTemplate } from "../../app/actions/document-template"
+import DynamicPrintLayout from "../settings/DynamicPrintLayout"
 
 export default function InvoiceManager({ organizationId }: { organizationId: string }) {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -14,6 +16,7 @@ export default function InvoiceManager({ organizationId }: { organizationId: str
   const [showModal, setShowModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
+  const [templateHtml, setTemplateHtml] = useState<string>("")
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -21,12 +24,14 @@ export default function InvoiceManager({ organizationId }: { organizationId: str
   }, [])
 
   const loadData = async () => {
-    const [invoicesResult, customersResult] = await Promise.all([
+    const [invoicesResult, customersResult, templateResult] = await Promise.all([
       getInvoices(),
       getCustomers(),
+      getDocumentTemplate("INVOICE")
     ])
     if (invoicesResult.success) setInvoices(invoicesResult.invoices)
     if (customersResult.success) setCustomers(customersResult.customers)
+    if (templateResult.success && templateResult.template) setTemplateHtml(templateResult.template.contentHtml)
     setLoading(false)
   }
 
@@ -156,13 +161,29 @@ export default function InvoiceManager({ organizationId }: { organizationId: str
                 >
                   <Share2 size={16} />
                 </button>
-                <button
-                  onClick={() => handleDownloadPDF(invoice)}
-                  className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-                  title="Download PDF"
-                >
-                  <Download size={16} />
-                </button>
+                
+                {templateHtml ? (
+                  <DynamicPrintLayout
+                    templateHtml={templateHtml}
+                    data={{
+                      ...invoice,
+                      date: new Date(invoice.invoiceDate).toLocaleDateString("id-ID"),
+                      customerName: invoice.customer?.name,
+                    }}
+                    documentTitle={`Invoice_${invoice.invoiceNumber}`}
+                    customButton={
+                      <button className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" title="Cetak (Template Custom)"><Printer size={16} /></button>
+                    }
+                  />
+                ) : (
+                  <button
+                    onClick={() => handleDownloadPDF(invoice)}
+                    className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
+                    title="Cetak (Template Standar)"
+                  >
+                    <Printer size={16} />
+                  </button>
+                )}
                 {invoice.status === "DRAFT" && (
                   <button
                     onClick={() => handleUpdateStatus(invoice, "SENT")}

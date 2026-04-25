@@ -86,3 +86,87 @@ export async function deleteWarehouse(id: string) {
   revalidatePath("/warehouse")
   return { success: true }
 }
+
+export async function getWarehouseDashboardData() {
+  try {
+    const { organization } = await requireModuleAccess("warehouse")
+    
+    // Jalankan query agregasi secara paralel untuk performa optimal
+    const [
+      inventoryAgg,
+      lowStockItemsRaw,
+      lowStockCountRaw,
+      pendingInbound,
+      pendingOutbound,
+      movements
+    ] = await Promise.all([
+      // 1. Total Valuasi Inventory
+      prisma.inventoryItem.aggregate({
+        where: { organizationId: organization.id, status: 'ACTIVE' },
+        _sum: { totalValue: true }
+      }),
+      // 2. Daftar Item Stok Tipis (menggunakan Raw Query untuk komparasi 2 kolom)
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT i.id, i.name, w.name as "warehouseName", i.quantity as "currentStock", i."minStock"
+        FROM "InventoryItem" i
+        JOIN "Warehouse" w ON i."warehouseId" = w.id
+        WHERE i."organizationId" = $1
+          AND i.quantity <= i."minStock"
+          AND i."minStock" > 0
+        ORDER BY i.quantity ASC
+        LIMIT 5
+      `, organization.id),
+      // 3. Count Total Item Stok Tipis
+      prisma.$queryRawUnsafe<{count: number}[]>(`
+        SELECT COUNT(*)::int as count
+        FROM "InventoryItem"
+        WHERE "organizationId" = $1
+          AND quantity <= "minStock"
+          AND "minStock" > 0
+      `, organization.id),
+      // 4. Pending Inbound (PO yang siap masuk gudang)
+      prisma.purchaseOrder.count({
+        where: { organizationId: organization.id, status: { in: ['APPROVED', 'SENT', 'PARTIALLY_RECEIVED'] } }
+      }),
+      // 5. Pending Outbound (SO yang siap dikirim/picking)
+      prisma.salesOrder.count({
+        where: { organizationId: organization.id, status: { in: ['APPROVED', 'PROCESSING'] } }
+      }),
+      // 6. Aktivitas Terakhir
+      prisma.inventoryMovement.findMany({
+        where: { organizationId: organization.id },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: { item: { select: { name: true } } }
+      })
+    ])
+
+    return {
+      success: true,
+      metrics: {
+        totalInventoryValue: Number(inventoryAgg._sum.totalValue || 0),
+        lowStockCount: Number(lowStockCountRaw[0]?.count || 0),
+        pendingInboundCount: pendingInbound,
+        pendingOutboundCount: pendingOutbound,
+      },
+      lowStockItems: lowStockItemsRaw.map(item => ({
+        id: item.id,
+        name: item.name,
+        warehouseName: item.warehouseName,
+        currentStock: Number(item.currentStock),
+        minStock: Number(item.minStock)
+      })),
+      recentMovements: movements.map(mov => ({
+        id: mov.id,
+        type: mov.movementType,
+        itemName: mov.item?.name || 'Unknown Item',
+        quantity: Number(mov.quantity),
+        reference: mov.reference,
+        actorName: mov.performedBy || 'System',
+        date: mov.createdAt
+      }))
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}

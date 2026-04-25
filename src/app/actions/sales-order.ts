@@ -217,7 +217,7 @@ export async function deliverSalesOrder(soId: string, organizationId: string, fr
 export async function createSalesInvoice(
   soId: string, 
   organizationId: string,
-  accountIds: { piutangAccountId: string; pendapatanAccountId: string; ppnAccountId?: string }
+  accountIds: { piutangAccountId: string } // Hanya Piutang yg dioper, selebihnya otomatis dr Config
 ) {
   const session = await requireWritableModuleAccess("SALES", organizationId);
 
@@ -258,18 +258,22 @@ export async function createSalesInvoice(
       });
       
       // 2. Otomasi Jurnal (Integrasi COA)
+      const accConfig = await tx.accountingConfig.findUnique({
+        where: { organizationId }
+      });
+
       const piutangAccount = await tx.chartOfAccount.findFirst({
         where: { id: accountIds.piutangAccountId }
       });
       const pendapatanAccount = await tx.chartOfAccount.findFirst({
-        where: { id: accountIds.pendapatanAccountId }
+        where: { id: accConfig?.salesAccountId || "" }
       });
-      const ppnAccount = accountIds.ppnAccountId ? await tx.chartOfAccount.findFirst({
-        where: { id: accountIds.ppnAccountId }
+      const ppnAccount = accConfig?.ppnOutputAccountId ? await tx.chartOfAccount.findFirst({
+        where: { id: accConfig.ppnOutputAccountId }
       }) : null;
 
       if (!piutangAccount || !pendapatanAccount) {
-        throw new Error("Akun 'Piutang' atau 'Pendapatan' tidak valid.");
+        throw new Error("Akun 'Piutang' atau 'Pendapatan (Default)' tidak valid atau belum di-mapping di Pengaturan.");
       }
 
       const dppAmount = Number(so.subtotal) - Number(so.discountAmount);
@@ -324,4 +328,117 @@ export async function getSalesManagerData(organizationId: string) {
   ]);
 
   return { success: true, salesOrders, customers, warehouses, inventoryItems, accounts };
+}
+
+/**
+ * Membuat Retur Penjualan (Sales Return)
+ * Mengembalikan stok ke gudang dan membuat Jurnal Retur & HPP.
+ */
+export async function createSalesReturn(
+  invoiceId: string,
+  organizationId: string,
+  warehouseId: string,
+  piutangAccountId: string,
+  returnedItems: Array<{ itemId: string; quantity: number; unitPrice: number; unitCost: number; taxRate?: number }>
+) {
+  const session = await requireWritableModuleAccess("SALES", organizationId);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, organizationId },
+      });
+      if (!invoice) throw new Error("Invoice tidak ditemukan.");
+
+      const accConfig = await tx.accountingConfig.findUnique({
+        where: { organizationId }
+      });
+
+      if (!accConfig?.salesReturnAccountId || !accConfig?.inventoryAccountId || !accConfig?.cogsAccountId) {
+        throw new Error("Akun Retur Penjualan, Persediaan, atau HPP belum diatur di Pengaturan Akuntansi.");
+      }
+
+      let totalReturnDpp = 0;
+      let totalReturnTax = 0;
+      let totalCogs = 0;
+
+      // 1. Proses pengembalian stok (IN) dan hitung total nilai
+      for (const item of returnedItems) {
+        if (item.quantity <= 0) continue;
+
+        // Mutasi masuk (IN) ke gudang untuk item retur
+        await postInventoryMovementInTx(tx, {
+          organizationId,
+          itemId: item.itemId,
+          movementType: "IN",
+          quantity: item.quantity,
+          unitCost: item.unitCost, // Menggunakan HPP barang saat dikembalikan
+          reference: `RET-${invoice.invoiceNumber}`,
+          description: `Retur Penjualan dari Invoice ${invoice.invoiceNumber}`,
+          toWarehouseId: warehouseId,
+          performedBy: session.user.id,
+        });
+
+        const subtotal = item.quantity * item.unitPrice;
+        const tax = subtotal * ((item.taxRate || 0) / 100);
+
+        totalReturnDpp += subtotal;
+        totalReturnTax += tax;
+        totalCogs += (item.quantity * item.unitCost);
+      }
+
+      const totalReturnAmount = totalReturnDpp + totalReturnTax;
+      if (totalReturnAmount <= 0) throw new Error("Total retur tidak boleh 0.");
+
+      // 2. Update sisa tagihan Invoice (mengurangi piutang pelanggan)
+      const newRemaining = Math.max(0, invoice.remainingAmount - totalReturnAmount);
+      const newTotal = Math.max(0, invoice.totalAmount - totalReturnAmount);
+      const newStatus = newTotal === 0 ? "RETURNED" : invoice.status;
+
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          remainingAmount: newRemaining,
+          totalAmount: newTotal,
+          status: newStatus
+        }
+      });
+
+      // 3. Jurnal Akuntansi Retur Penjualan (Double-Entry)
+      const lines = [
+        // Debit: Retur Penjualan (Mengurangi Pendapatan)
+        { accountId: accConfig.salesReturnAccountId, debit: totalReturnDpp, credit: 0, description: `Retur Penjualan Invoice ${invoice.invoiceNumber}` },
+        // Kredit: Piutang Usaha (Mengurangi Piutang / Memotong tagihan)
+        { accountId: piutangAccountId, debit: 0, credit: totalReturnAmount, description: `Pengurangan Piutang (Retur) ${invoice.invoiceNumber}` }
+      ];
+
+      // Debit: PPN Keluaran (Membatalkan Pajak) jika ada
+      if (totalReturnTax > 0) {
+        if (!accConfig.ppnOutputAccountId) throw new Error("Akun PPN Keluaran belum di-mapping.");
+        lines.push({ accountId: accConfig.ppnOutputAccountId, debit: totalReturnTax, credit: 0, description: `Pembalikan PPN Keluaran ${invoice.invoiceNumber}` });
+      }
+
+      // Debit: Persediaan Barang (Masuk gudang kembali)
+      // Kredit: Harga Pokok Penjualan (Mengurangi Beban HPP yang dicatat sebelumnya)
+      if (totalCogs > 0) {
+        lines.push({ accountId: accConfig.inventoryAccountId, debit: totalCogs, credit: 0, description: `Pengembalian Persediaan (Retur) ${invoice.invoiceNumber}` });
+        lines.push({ accountId: accConfig.cogsAccountId, debit: 0, credit: totalCogs, description: `Pembalikan HPP (Retur) ${invoice.invoiceNumber}` });
+      }
+
+      // Eksekusi Pembuatan Jurnal
+      await createJournalInTx(tx, {
+        organizationId,
+        date: new Date(),
+        description: `Retur Penjualan untuk Invoice ${invoice.invoiceNumber}`,
+        reference: `RET-${invoice.invoiceNumber}`,
+        lines
+      });
+    });
+
+    revalidatePath(`/organization/${organizationId}/sales`);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error creating Sales Return:", error);
+    return { success: false, error: error.message || "Gagal membuat Retur Penjualan." };
+  }
 }

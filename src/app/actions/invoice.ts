@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { requireCurrentOrganization } from "../../lib/auth"
 import { hasModulePermission } from "../../lib/permissions"
 import { logAudit } from "../../lib/audit-logger"
+import { createJournalInTx } from "../../lib/accounting/journal"
 
 // ==================== INVOICE ====================
 
@@ -20,6 +21,11 @@ export async function createInvoice(formData: FormData) {
   const paymentTerm = parseInt((formData.get("paymentTerm") as string) || "30")
   const dueDate = new Date(invoiceDate)
   dueDate.setDate(dueDate.getDate() + paymentTerm)
+  
+  const piutangAccountId = formData.get("piutangAccountId") as string
+  if (!piutangAccountId) {
+    throw new Error("Akun Piutang wajib dipilih untuk Invoice Penjualan.")
+  }
 
   const itemsJson = formData.get("items") as string
   const items = JSON.parse(itemsJson)
@@ -68,6 +74,34 @@ export async function createInvoice(formData: FormData) {
         taxAmount: item.taxAmount,
         total: item.total,
       })),
+    })
+
+    // Otomasi Jurnal Akuntansi untuk Invoice
+    const accConfig = await tx.accountingConfig.findUnique({
+      where: { organizationId: organization.id }
+    })
+
+    if (!accConfig?.salesAccountId) {
+      throw new Error("Akun Default Pendapatan belum diatur di Pengaturan Akuntansi.")
+    }
+
+    const dppAmount = subtotal - (items.reduce((sum: number, item: any) => sum + item.discount, 0))
+    const lines = [
+      { accountId: piutangAccountId, debit: totalAmount, credit: 0, description: `Piutang Usaha Invoice ${invoiceNumber}` },
+      { accountId: accConfig.salesAccountId, debit: 0, credit: dppAmount, description: `Pendapatan Invoice ${invoiceNumber}` }
+    ]
+
+    if (taxAmount > 0) {
+      if (!accConfig.ppnOutputAccountId) throw new Error("Akun PPN Keluaran belum diatur di Pengaturan Akuntansi.")
+      lines.push({ accountId: accConfig.ppnOutputAccountId, debit: 0, credit: taxAmount, description: `PPN Keluaran Invoice ${invoiceNumber}` })
+    }
+
+    await createJournalInTx(tx, {
+      organizationId: organization.id,
+      date: invoiceDate,
+      reference: invoiceNumber,
+      description: `Invoice Penjualan ${invoiceNumber} ke Customer`,
+      lines
     })
 
     return created
@@ -147,6 +181,14 @@ export async function addInvoicePayment(formData: FormData) {
   const bankAccountId = formData.get("bankAccountId") as string
   const referenceNumber = formData.get("referenceNumber") as string
   const notes = formData.get("notes") as string
+  
+  // Akun untuk Jurnal
+  const cashAccountId = formData.get("cashAccountId") as string
+  const arAccountId = formData.get("arAccountId") as string
+
+  if (!cashAccountId || !arAccountId) {
+    throw new Error("Akun Penerimaan (Kas) dan Akun Piutang wajib diisi untuk jurnal pelunasan.")
+  }
 
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
 
@@ -183,6 +225,28 @@ export async function addInvoicePayment(formData: FormData) {
         remainingAmount,
         status,
       },
+    })
+
+    // Otomasi Jurnal Pelunasan Piutang
+    await createJournalInTx(tx, {
+      organizationId: organization.id,
+      date: paymentDate,
+      reference: referenceNumber || `PAY-${invoice.invoiceNumber}`,
+      description: `Pelunasan Piutang Invoice ${invoice.invoiceNumber}`,
+      lines: [
+        { 
+          accountId: cashAccountId, 
+          debit: amount, 
+          credit: 0, 
+          description: `Penerimaan Dana ${invoice.invoiceNumber}` 
+        },
+        { 
+          accountId: arAccountId, 
+          debit: 0, 
+          credit: amount, 
+          description: `Pengurangan Piutang ${invoice.invoiceNumber}` 
+        }
+      ]
     })
   })
 
@@ -235,6 +299,11 @@ export async function createVendorBill(formData: FormData) {
   const dueDate = new Date(billDate)
   dueDate.setDate(dueDate.getDate() + paymentTerm)
 
+  const hutangAccountId = formData.get("hutangAccountId") as string
+  if (!hutangAccountId) {
+    throw new Error("Akun Hutang wajib dipilih untuk Tagihan Pembelian (Vendor Bill).")
+  }
+
   const itemsJson = formData.get("items") as string
   const items = JSON.parse(itemsJson)
 
@@ -282,6 +351,36 @@ export async function createVendorBill(formData: FormData) {
         taxAmount: item.taxAmount,
         total: item.total,
       })),
+    })
+
+    // Otomasi Jurnal Akuntansi untuk Vendor Bill
+    const accConfig = await tx.accountingConfig.findUnique({
+      where: { organizationId: organization.id }
+    })
+
+    // Default Tagihan Pembelian masuk ke Harga Pokok (COGS) atau Persediaan Barang
+    const expenseAccountId = accConfig?.cogsAccountId || accConfig?.inventoryAccountId
+    if (!expenseAccountId) {
+      throw new Error("Akun Default HPP / Persediaan belum diatur di Pengaturan Akuntansi.")
+    }
+
+    const dppAmount = subtotal - (items.reduce((sum: number, item: any) => sum + item.discount, 0))
+    const lines = [
+      { accountId: expenseAccountId, debit: dppAmount, credit: 0, description: `Pembelian / Beban Bill ${billNumber}` },
+      { accountId: hutangAccountId, debit: 0, credit: totalAmount, description: `Hutang Usaha Bill ${billNumber}` }
+    ]
+
+    if (taxAmount > 0) {
+      if (!accConfig.ppnInputAccountId) throw new Error("Akun PPN Masukan (Input) belum diatur di Pengaturan Akuntansi.")
+      lines.push({ accountId: accConfig.ppnInputAccountId, debit: taxAmount, credit: 0, description: `PPN Masukan Bill ${billNumber}` })
+    }
+
+    await createJournalInTx(tx, {
+      organizationId: organization.id,
+      date: billDate,
+      reference: billNumber,
+      description: `Tagihan Pembelian ${billNumber} dari Supplier`,
+      lines
     })
 
     return created
@@ -361,6 +460,14 @@ export async function addVendorBillPayment(formData: FormData) {
   const bankAccountId = formData.get("bankAccountId") as string
   const referenceNumber = formData.get("referenceNumber") as string
   const notes = formData.get("notes") as string
+  
+  // Akun untuk Jurnal
+  const cashAccountId = formData.get("cashAccountId") as string
+  const apAccountId = formData.get("apAccountId") as string
+
+  if (!cashAccountId || !apAccountId) {
+    throw new Error("Akun Pengeluaran (Kas) dan Akun Hutang wajib diisi untuk jurnal pelunasan.")
+  }
 
   const vendorBill = await prisma.vendorBill.findUnique({ where: { id: vendorBillId } })
 
@@ -397,6 +504,28 @@ export async function addVendorBillPayment(formData: FormData) {
         remainingAmount,
         status,
       },
+    })
+
+    // Otomasi Jurnal Pelunasan Hutang
+    await createJournalInTx(tx, {
+      organizationId: organization.id,
+      date: paymentDate,
+      reference: referenceNumber || `PAY-${vendorBill.billNumber}`,
+      description: `Pelunasan Hutang Vendor Bill ${vendorBill.billNumber}`,
+      lines: [
+        { 
+          accountId: apAccountId, 
+          debit: amount, 
+          credit: 0, 
+          description: `Pengurangan Hutang ${vendorBill.billNumber}` 
+        },
+        { 
+          accountId: cashAccountId, 
+          debit: 0, 
+          credit: amount, 
+          description: `Pengeluaran Dana ${vendorBill.billNumber}` 
+        }
+      ]
     })
   })
 

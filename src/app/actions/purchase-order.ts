@@ -278,7 +278,11 @@ export async function getPurchaseOrderById(id: string) {
   return { success: true, po }
 }
 
-export async function receivePurchaseOrder(poId: string, receivedItems: Array<{ poItemId: string; quantity: number; warehouseId: string }>) {
+export async function receivePurchaseOrder(
+  poId: string, 
+  receivedItems: Array<{ poItemId: string; quantity: number; warehouseId: string }>,
+  landedCostData?: { amount: number; method: 'QUANTITY' | 'VALUE' }
+) {
   // Validasi RBAC untuk penerimaan barang ke gudang
   const { organization, user } = await requireWritableModuleAccess("warehouse")
 
@@ -293,12 +297,28 @@ export async function receivePurchaseOrder(poId: string, receivedItems: Array<{ 
       throw new Error("Status PO tidak valid untuk penerimaan barang.")
     }
 
-    for (const receipt of receivedItems) {
+    // 1. Hitung Total Qty dan Total Value untuk dasar proporsi Landed Cost
+    let totalQtyReceived = 0
+    let totalValueReceived = 0
+    const itemsToProcess = receivedItems.map((receipt) => {
       const item = po.items.find((i) => i.id === receipt.poItemId)
       if (!item) throw new Error(`Item PO dengan ID ${receipt.poItemId} tidak ditemukan.`)
+      
+      const receivedQty = Number(receipt.quantity)
+      const unitPrice = Number(item.unitPrice)
+      
+      totalQtyReceived += receivedQty
+      totalValueReceived += (receivedQty * unitPrice)
+      return { receipt, item, receivedQty, unitPrice }
+    })
+
+    // Variabel akumulasi untuk Jurnal Akuntansi
+    let totalInventoryDebit = 0
+    let totalGrniCredit = 0
+
+    for (const { receipt, item, receivedQty, unitPrice } of itemsToProcess) {
       if (!item.itemId) throw new Error(`Item "${item.description}" tidak memiliki relasi ke Master Barang (InventoryItem).`)
 
-      const receivedQty = Number(receipt.quantity)
       if (receivedQty <= 0) throw new Error(`Kuantitas penerimaan untuk "${item.description}" harus lebih dari 0.`)
 
       // Update qty diterima di PO Item
@@ -311,6 +331,27 @@ export async function receivePurchaseOrder(poId: string, receivedItems: Array<{ 
         where: { id: item.id },
         data: { receivedQty: newReceivedQty },
       })
+      
+      // 2. Alokasi Landed Cost ke Item ini
+      let allocatedCost = 0
+      if (landedCostData && landedCostData.amount > 0) {
+        if (landedCostData.method === 'QUANTITY' && totalQtyReceived > 0) {
+          allocatedCost = (receivedQty / totalQtyReceived) * landedCostData.amount
+        } else if (landedCostData.method === 'VALUE' && totalValueReceived > 0) {
+          const itemValue = receivedQty * unitPrice
+          allocatedCost = (itemValue / totalValueReceived) * landedCostData.amount
+        }
+      }
+
+      // HPP Unit Cost final (Harga Asli + Proporsi Biaya Tambahan)
+      const additionalCostPerUnit = receivedQty > 0 ? (allocatedCost / receivedQty) : 0
+      const finalUnitCost = unitPrice + additionalCostPerUnit
+      
+      // Akumulasi Jurnal
+      const inventoryItemValue = receivedQty * finalUnitCost
+      const grniItemValue = receivedQty * unitPrice
+      totalInventoryDebit += inventoryItemValue
+      totalGrniCredit += grniItemValue
 
       // Buat mutasi persediaan masuk (IN) ke Gudang (Warehouse) melalui Immutable Ledger
       await postInventoryMovementInTx(tx, {
@@ -318,7 +359,7 @@ export async function receivePurchaseOrder(poId: string, receivedItems: Array<{ 
         itemId: item.itemId,
         movementType: "IN",
         quantity: receivedQty,
-        unitCost: Number(item.unitPrice),
+        unitCost: finalUnitCost, // Menggunakan HPP yang sudah menyerap Landed Cost
         reference: po.poNumber,
         description: `Penerimaan barang dari PO ${po.poNumber}`,
         toWarehouseId: receipt.warehouseId,
@@ -338,6 +379,28 @@ export async function receivePurchaseOrder(poId: string, receivedItems: Array<{ 
       where: { id: po.id },
       data: { status: isFullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED" },
     })
+    
+    // 3. Create Accounting Journal In Transaction (Otomatis)
+    // Pseudocode terintegrasi (Gunakan util journal akuntansi yang sesuai dengan struktur project Anda):
+    // const landedCostAmount = landedCostData?.amount || 0
+    // await createJournalInTx(tx, {
+    //   organizationId: organization.id,
+    //   date: new Date(),
+    //   reference: po.poNumber,
+    //   description: `GRN untuk PO ${po.poNumber}`,
+    //   lines: [
+    //     // Debit: Persediaan (Nilai Barang + Landed Cost)
+    //     { accountCode: "1130-INVENTORY", debit: totalInventoryDebit, credit: 0 },
+    //     
+    //     // Kredit: Hutang Belum Ditagih / GRNI (Sesuai nilai barang asli)
+    //     { accountCode: "2120-GRNI", debit: 0, credit: totalGrniCredit },
+    //
+    //     // Kredit: Hutang Biaya Ekspedisi/Asuransi (Jika ada Landed Cost)
+    //     ...(landedCostAmount > 0 
+    //         ? [{ accountCode: "2130-ACCRUED-EXPENSE", debit: 0, credit: landedCostAmount }] 
+    //         : [])
+    //   ]
+    // })
   })
 
   revalidatePath("/po")

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Plus, Share2, Download, FileText, Trash2, Check, X } from "lucide-react"
+import { Plus, Share2, Download, FileText, Trash2, Check, X, Printer } from "lucide-react"
 import {
   getPurchaseOrders,
   createPurchaseOrder,
@@ -12,6 +12,8 @@ import {
 } from "../../app/actions/purchase-order"
 import { getSuppliers, createSupplier } from "../../app/actions/arap"
 import { getWarehouses } from "../../app/actions/warehouse"
+import { getDocumentTemplate } from "../../app/actions/document-template"
+import DynamicPrintLayout from "../settings/DynamicPrintLayout"
 import ReceivePurchaseOrderModal from "./ReceivePurchaseOrderModal"
 
 type Supplier = {
@@ -60,6 +62,7 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
   const [items, setItems] = useState<PurchaseOrderItemInput[]>([
     { description: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 11 },
   ])
+  const [templateHtml, setTemplateHtml] = useState<string>("")
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -68,14 +71,16 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
 
   const loadData = async () => {
     setLoading(true)
-    const [posResult, suppliersResult, warehousesResult] = await Promise.all([
+    const [posResult, suppliersResult, warehousesResult, templateResult] = await Promise.all([
       getPurchaseOrders(),
       getSuppliers(),
       getWarehouses(),
+      getDocumentTemplate("PO"),
     ])
     if (posResult.success) setPos(posResult.purchaseOrders)
     if (suppliersResult.success) setSuppliers(suppliersResult.suppliers)
     if (warehousesResult?.success) setWarehouses(warehousesResult.warehouses)
+    if (templateResult.success && templateResult.template) setTemplateHtml(templateResult.template.contentHtml)
     setLoading(false)
   }
 
@@ -199,13 +204,29 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
                 >
                   <Share2 size={16} />
                 </button>
-                <button
-                  onClick={() => handleDownloadPDF(po)}
-                  className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-                  title="Download PDF"
-                >
-                  <Download size={16} />
-                </button>
+                
+                {templateHtml ? (
+                  <DynamicPrintLayout
+                    templateHtml={templateHtml}
+                    data={{
+                      ...po,
+                      date: new Date(po.orderDate).toLocaleDateString("id-ID"),
+                      supplierName: po.supplier?.name,
+                    }}
+                    documentTitle={`PO_${po.poNumber}`}
+                    customButton={
+                      <button className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" title="Cetak PO (Template Custom)"><Printer size={16} /></button>
+                    }
+                  />
+                ) : (
+                  <button
+                    onClick={() => handleDownloadPDF(po)}
+                    className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
+                    title="Cetak PO (Template Standar)"
+                  >
+                    <Download size={16} />
+                  </button>
+                )}
                 {po.status === "DRAFT" && (
                   <button
                     onClick={() => {

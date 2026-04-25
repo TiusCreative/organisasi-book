@@ -167,11 +167,45 @@ Catatan implementasi (saat ini):
 - Ambil cost sesuai method valuation
 - Simpan snapshot `unitCost` & `totalCost` di movement
 
-### 5.3 Jurnal Akuntansi (opsional bertahap)
+### 5.3 Mapping Standar Jurnal Akuntansi (Wajib Terintegrasi)
+Setiap pergerakan gudang (Movement) yang mengubah nilai stok wajib men-trigger `Accounting Event` (atau langsung `createJournalInTx`).
 
-- Issue material WO: Dr WIP / Cr Inventory
-- Complete WO: Dr FG / Cr WIP
-- Stock adjustment: akun selisih persediaan
+1. **Penerimaan Pembelian (PO / GRN)**
+   - **Debit (Dr):** Persediaan (Inventory)
+   - **Kredit (Cr):** Hutang Belum Ditagih (GRNI - Goods Received Not Invoiced)
+   - *(Saat tagihan/Vendor Bill datang, GRNI akan didebit, dan Hutang Usaha / AP dikredit)*
+
+2. **Pengiriman Penjualan (SO / Delivery Order)**
+   - **Debit (Dr):** Harga Pokok Penjualan (COGS)
+   - **Kredit (Cr):** Persediaan (Inventory)
+
+3. **Retur Penjualan (Sales Return)**
+   - **Debit (Dr):** Persediaan (Inventory)
+   - **Kredit (Cr):** Harga Pokok Penjualan (COGS)
+
+4. **Pemakaian Produksi (WO Material Issue)**
+   - **Debit (Dr):** Barang Dalam Proses (WIP)
+   - **Kredit (Cr):** Persediaan Bahan Baku (Raw Material Inventory)
+
+5. **Penyelesaian Produksi (WO Complete)**
+   - **Debit (Dr):** Persediaan Barang Jadi (Finished Goods Inventory)
+   - **Kredit (Cr):** Barang Dalam Proses (WIP)
+
+6. **Stock Opname (Penyesuaian Plus/Minus)**
+   - **Jika Minus (Stok Hilang/Rusak):**
+     - Dr: Beban Selisih Persediaan (Inventory Variance Expense)
+     - Cr: Persediaan (Inventory)
+   - **Jika Plus (Stok Lebih):**
+     - Dr: Persediaan (Inventory)
+     - Cr: Pendapatan/Koreksi Persediaan (Inventory Variance Income)
+
+7. **Transfer Antar Cabang (In-Transit)**
+   - **Saat Kirim:** Dr: Persediaan In-Transit | Cr: Persediaan (Cabang A)
+   - **Saat Terima:** Dr: Persediaan (Cabang B) | Cr: Persediaan In-Transit
+
+### 5.4 Proteksi Tutup Buku (Period Lock)
+- Semua transaksi `IN/OUT/ADJUSTMENT` di gudang **wajib memanggil `isPeriodLockedInTx`** dari modul Akuntansi.
+- Jika periode akuntansi untuk tanggal transaksi tersebut sudah dikunci (Closed), mutasi gudang harus ditolak oleh sistem (untuk mencegah ketidakseimbangan Neraca).
 
 ---
 
@@ -285,10 +319,12 @@ Deliverable:
 2. Transactional outbox + retry/DLQ + replay tooling
 3. CQRS reporting model + rebuild read model terkontrol
 4. Ledger partitioning/archiving (per periode) + indexing strategy
-5. SLA monitoring + alerting + load test + disaster recovery drill
+5. Integrasi `Exactly-Once` ke Jurnal Akuntansi (memastikan tidak ada event gudang yang gagal dibukukan di GL).
+6. SLA monitoring + alerting + load test + disaster recovery drill
 
 Deliverable:
-- Sistem siap beban besar dan audit enterprise.
+- Sistem siap beban besar (High Throughput).
+- Jurnal akuntansi terupdate secara *real-time* atau *near real-time* secara andal menggunakan Event/Outbox pattern.
 
 ### Phase 5 - Operational Excellence & Compliance
 
@@ -298,16 +334,15 @@ Deliverable:
 2. Security hardening lanjutan:
    - MFA untuk role sensitif + session hardening
    - secret/key rotation SOP + backup encryption
-3. Rekonsiliasi otomatis:
-   - ledger vs balance (harian)
-   - inventory vs GL (mingguan/bulanan)
+3. **Sub-Ledger vs GL Reconciliation Engine (Akuntansi):**
+   - Job otomatis mencocokkan Total Nilai Stock di `StockLedger/Balance` dengan Saldo Akun Persediaan di Neraca (`ChartOfAccount`).
    - alert anomaly (stok negatif, lonjakan adjustment, backdate)
 4. WMS automation:
    - mobile scanner (barcode/QR) untuk putaway/pick/cycle count
    - wave/batch picking + replenishment
 
 Deliverable:
-- Operasional stabil jangka panjang, audit/compliance siap, dan proses gudang makin otomatis.
+- Operasional stabil jangka panjang, audit/compliance siap, proses gudang otomatis, dan **nilai persediaan selalu sinkron/klop 100% dengan Neraca Akuntansi**.
 
 #### 5.x Automation (Praktis)
 
@@ -328,18 +363,22 @@ Job yang disarankan dijalankan terjadwal (cron) dari environment ops:
 1. WMS advanced workflow:
    - packing + label/manifest + staging shipment
    - pick path optimization (slotting/routing sederhana)
-2. Integrasi eksternal:
+2. **Landed Cost Engine (Alokasi Biaya ke HPP):**
+   - Modul untuk mendistribusikan biaya pengiriman (freight), asuransi, dan bea cukai secara proporsional (berdasarkan berat/volume/nilai) ke Harga Pokok Persediaan (Unit Cost) item yang diimpor.
+3. **Inter-branch Transfer Pricing (Akuntansi Advanced):**
+   - Dukungan transfer stok antar gudang beda PT / Cabang dengan mekanisme mark-up (Laba antar entitas).
+4. Integrasi eksternal:
    - courier/TMS (resi, tracking, shipping cost)
    - EDI/basic integration untuk PO/SO (opsional)
-3. Enterprise identity & policy:
+5. Enterprise identity & policy:
    - SSO (SAML/OIDC) + SCIM provisioning (opsional)
    - separation of duties (SoD) policy untuk transaksi sensitif
-4. Analytics at scale:
+6. Analytics at scale:
    - export ke data warehouse/lake untuk BI
    - anomaly detection lebih advanced (opsional)
 
 Deliverable:
-- Ekosistem logistik end-to-end lebih matang, optimisasi picking/packing meningkat, dan integrasi enterprise siap.
+- Ekosistem logistik end-to-end lebih matang, nilai HPP sangat akurat dengan alokasi *Landed Cost*, serta integrasi enterprise (SSO & BI) siap.
 
 ---
 
@@ -378,3 +417,4 @@ curl -H "x-ops-secret: $OPS_SECRET" -X POST http://localhost:3000/api/ops/daily 
 4. Multi gudang + multi lokasi bisa dijalankan tanpa kehilangan traceability.
 5. Nilai inventory konsisten dengan costing method dan jurnal (saat accounting integration aktif).
 6. Read model/reporting bisa dibangun ulang tanpa mengubah source-of-truth ledger.
+7. Tidak ada mutasi stok yang bisa diposting ke periode akuntansi yang sudah dikunci (Period Lock).
