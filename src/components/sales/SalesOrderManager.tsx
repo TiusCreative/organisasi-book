@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Check, Truck, FileText, Send, Trash2 } from "lucide-react"
+import { Plus, Check, Truck, FileText, Send, Trash2, Printer } from "lucide-react"
 import { 
   getSalesManagerData, 
   requestSalesOrderApproval, 
@@ -10,6 +10,8 @@ import {
   createSalesInvoice,
   createSalesOrderDraft
 } from "@/app/actions/sales-order"
+import { getDocumentTemplate } from "@/app/actions/document-template"
+import DynamicPrintLayout from "@/components/settings/DynamicPrintLayout"
 
 type Customer = { id: string; name: string }
 type Warehouse = { id: string; name: string }
@@ -51,10 +53,18 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
     ppnAccountId: ""
   })
 
+  // State untuk template DO
+  const [doTemplateHtml, setDoTemplateHtml] = useState<string>("")
+  const [showPrintModal, setShowPrintModal] = useState(false)
+  const [selectedSOForPrint, setSelectedSOForPrint] = useState<any>(null)
+
   const loadData = async () => {
     setLoading(true)
     try {
-      const res = await getSalesManagerData(organizationId)
+      const [res, templateRes] = await Promise.all([
+        getSalesManagerData(organizationId),
+        getDocumentTemplate("DO")
+      ])
       if (res.success) {
         setSalesOrders(res.salesOrders as any)
         setCustomers(res.customers)
@@ -64,6 +74,9 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
         if (res.warehouses.length > 0) {
           setSelectedWarehouseId(res.warehouses[0].id)
         }
+      }
+      if (templateRes.success && templateRes.template) {
+        setDoTemplateHtml(templateRes.template.contentHtml)
       }
     } catch (e) {
       console.error(e)
@@ -182,6 +195,11 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
     }
   }
 
+  const handlePrintDO = (so: any) => {
+    setSelectedSOForPrint(so)
+    setShowPrintModal(true)
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div className="flex justify-between items-center">
@@ -246,12 +264,20 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                 )}
 
                 {so.status === "SHIPPED" && (
-                  <button 
-                    onClick={() => openInvoiceModal(so.id)}
-                    className="flex items-center gap-1 rounded-lg bg-blue-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-blue-700"
-                  >
-                    <FileText size={16} /> Buat Faktur & Jurnal
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => handlePrintDO(so)}
+                      className="flex items-center gap-1 rounded-lg border border-slate-600 text-slate-700 px-3 py-1.5 text-sm font-medium hover:bg-slate-50"
+                    >
+                      <Printer size={16} /> Cetak DO
+                    </button>
+                    <button 
+                      onClick={() => openInvoiceModal(so.id)}
+                      className="flex items-center gap-1 rounded-lg bg-blue-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-blue-700"
+                    >
+                      <FileText size={16} /> Buat Faktur & Jurnal
+                    </button>
+                  </>
                 )}
                 
                 {so.status === "INVOICED" && (
@@ -436,6 +462,38 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
               >
                 Konfirmasi Pengiriman
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Print DO */}
+      {showPrintModal && selectedSOForPrint && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-4xl rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+              <h3 className="font-bold text-lg">Cetak Delivery Order</h3>
+              <button onClick={() => setShowPrintModal(false)} className="text-slate-400 hover:text-slate-800">✕</button>
+            </div>
+            <div className="p-6">
+              {doTemplateHtml ? (
+                <DynamicPrintLayout
+                  templateHtml={doTemplateHtml}
+                  data={{
+                    doNumber: selectedSOForPrint.deliveryOrder?.doCode || `DO-${selectedSOForPrint.code}`,
+                    customerName: selectedSOForPrint.customer?.name,
+                    date: new Date().toLocaleDateString("id-ID"),
+                    driverName: "Driver",
+                    items: selectedSOForPrint.items || [],
+                    total: selectedSOForPrint.totalAmount
+                  }}
+                  documentTitle={`DO-${selectedSOForPrint.code}`}
+                />
+              ) : (
+                <div className="text-center text-slate-500 py-8">
+                  Template DO belum diatur. Silakan atur di Pengaturan > Template Dokumen.
+                </div>
+              )}
             </div>
           </div>
         </div>
