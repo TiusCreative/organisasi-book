@@ -12,7 +12,8 @@ const DOC_TYPES = [
   { value: "RETURN", label: "Nota Retur (Sales Return)", variables: "{{invoiceNumber}}, {{customerName}}, {{returnDate}}" },
 ]
 
-const DEFAULT_HTML = `
+const DEFAULT_TEMPLATES = {
+  INVOICE: `
 <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
   <h1 style="color: #2563eb; border-bottom: 2px solid #2563eb;">INVOICE</h1>
   <p><strong>Nomor:</strong> {{invoiceNumber}}</p>
@@ -33,11 +34,98 @@ const DEFAULT_HTML = `
   </table>
   <h3 style="text-align: right; margin-top: 20px;">Grand Total: Rp {{total}}</h3>
 </div>
+`.trim(),
+  PO: `
+<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+  <h1 style="color: #059669; border-bottom: 2px solid #059669;">PURCHASE ORDER</h1>
+  <p><strong>Nomor PO:</strong> {{poNumber}}</p>
+  <p><strong>Tanggal:</strong> {{date}}</p>
+  <p><strong>Supplier:</strong> {{supplierName}}</p>
+  
+  <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <tr>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: left; background: #f8fafc;">Deskripsi Barang</th>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: right; background: #f8fafc;">Harga</th>
+    </tr>
+    {{#each items}}
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px;">{{description}} (x{{quantity}})</td>
+      <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">Rp {{total}}</td>
+    </tr>
+    {{/each}}
+  </table>
+  <h3 style="text-align: right; margin-top: 20px;">Grand Total: Rp {{total}}</h3>
+</div>
+`.trim(),
+  DO: `
+<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+  <h1 style="color: #dc2626; border-bottom: 2px solid #dc2626;">DELIVERY ORDER</h1>
+  <p><strong>Nomor DO:</strong> {{doNumber}}</p>
+  <p><strong>Tanggal:</strong> {{date}}</p>
+  <p><strong>Pelanggan:</strong> {{customerName}}</p>
+  <p><strong>Driver:</strong> {{driverName}}</p>
+  
+  <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <tr>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: left; background: #f8fafc;">Deskripsi Barang</th>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: right; background: #f8fafc;">Jumlah</th>
+    </tr>
+    {{#each items}}
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px;">{{description}}</td>
+      <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">{{quantity}}</td>
+    </tr>
+    {{/each}}
+  </table>
+</div>
+`.trim(),
+  RECEIPT: `
+<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+  <h1 style="color: #7c3aed; border-bottom: 2px solid #7c3aed;">BON PENERIMAAN BARANG (GRN)</h1>
+  <p><strong>Nomor PO:</strong> {{poNumber}}</p>
+  <p><strong>Tanggal Penerimaan:</strong> {{receivedDate}}</p>
+  <p><strong>Gudang:</strong> {{warehouse}}</p>
+  
+  <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <tr>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: left; background: #f8fafc;">Deskripsi Barang</th>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: right; background: #f8fafc;">Jumlah Diterima</th>
+    </tr>
+    {{#each items}}
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px;">{{description}}</td>
+      <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">{{quantity}}</td>
+    </tr>
+    {{/each}}
+  </table>
+</div>
+`.trim(),
+  RETURN: `
+<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+  <h1 style="color: #ea580c; border-bottom: 2px solid #ea580c;">NOTA RETUR</h1>
+  <p><strong>Nomor Invoice:</strong> {{invoiceNumber}}</p>
+  <p><strong>Tanggal Retur:</strong> {{returnDate}}</p>
+  <p><strong>Pelanggan:</strong> {{customerName}}</p>
+  
+  <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <tr>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: left; background: #f8fafc;">Deskripsi Barang</th>
+      <th style="border: 1px solid #ccc; padding: 8px; text-align: right; background: #f8fafc;">Jumlah Retur</th>
+    </tr>
+    {{#each items}}
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px;">{{description}}</td>
+      <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">{{quantity}}</td>
+    </tr>
+    {{/each}}
+  </table>
+</div>
 `.trim()
+}
 
 export default function DocumentTemplateSettings() {
   const [docType, setDocType] = useState(DOC_TYPES[0].value)
-  const [htmlContent, setHtmlContent] = useState(DEFAULT_HTML)
+  const [htmlContent, setHtmlContent] = useState(DEFAULT_TEMPLATES.INVOICE)
   const [isSaving, setIsSaving] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -48,8 +136,8 @@ export default function DocumentTemplateSettings() {
       if (res.success && res.template) {
         setHtmlContent(res.template.contentHtml)
       } else {
-        // Fallback HTML if no template found
-        setHtmlContent(`<h1>Template ${docType}</h1>\n<p>Nomor: {{docNumber}}</p>`)
+        // Use default template for the selected document type
+        setHtmlContent(DEFAULT_TEMPLATES[docType as keyof typeof DEFAULT_TEMPLATES] || DEFAULT_TEMPLATES.INVOICE)
       }
       setLoading(false)
     }
