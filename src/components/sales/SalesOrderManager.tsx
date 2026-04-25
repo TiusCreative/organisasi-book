@@ -315,6 +315,7 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                  <p className="text-xs text-slate-500">Pilih pelanggan yang akan memesan barang</p>
                 </div>
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-slate-700">Rate Komisi Sales (%)</label>
@@ -323,6 +324,7 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                     onChange={(e) => setNewSO({ ...newSO, commissionRate: Number(e.target.value) })}
                     className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
+                  <p className="text-xs text-slate-500">Persentase komisi untuk sales (opsional)</p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="block text-sm font-semibold text-slate-700">Catatan / Terms (Opsional)</label>
@@ -333,12 +335,22 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                     rows={2}
                     placeholder="Tuliskan catatan tambahan untuk pelanggan..."
                   ></textarea>
+                  <p className="text-xs text-slate-500">Catatan tambahan atau syarat pembayaran</p>
                 </div>
               </div>
 
               {/* Seksi Daftar Barang */}
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                 <h4 className="font-bold text-slate-800 mb-4 text-base">Rincian Barang</h4>
+                <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <p className="text-xs text-blue-700"><strong>Keterangan Kolom:</strong></p>
+                  <ul className="text-xs text-blue-600 mt-1 space-y-1">
+                    <li>• <strong>Item/Barang:</strong> Pilih produk dari master barang</li>
+                    <li>• <strong>Kuantitas:</strong> Jumlah barang yang dipesan</li>
+                    <li>• <strong>Harga Satuan:</strong> Harga per unit barang (Rp)</li>
+                    <li>• <strong>Pajak (%):</strong> PPN/Pajak penjualan (default 11%)</li>
+                  </ul>
+                </div>
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-slate-100 text-slate-600">
@@ -364,6 +376,7 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                                 <option key={i.id} value={i.id}>{i.code} - {i.name}</option>
                               ))}
                             </select>
+                            <p className="text-[10px] text-slate-400 mt-1">Pilih produk</p>
                           </td>
                           <td className="p-2">
                             <input 
@@ -371,6 +384,7 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                               onChange={(e) => handleItemChange(idx, "quantity", Number(e.target.value))}
                               className="w-full rounded-md border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
                             />
+                            <p className="text-[10px] text-slate-400 mt-1">Jumlah</p>
                           </td>
                           <td className="p-2">
                             <input 
@@ -378,6 +392,7 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                               onChange={(e) => handleItemChange(idx, "unitPrice", Number(e.target.value))}
                               className="w-full rounded-md border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
                             />
+                            <p className="text-[10px] text-slate-400 mt-1">Harga/unit</p>
                           </td>
                           <td className="p-2">
                             <input 
@@ -385,6 +400,7 @@ export default function SalesOrderManager({ organizationId }: { organizationId: 
                               onChange={(e) => handleItemChange(idx, "taxRate", Number(e.target.value))}
                               className="w-full rounded-md border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
                             />
+                            <p className="text-[10px] text-slate-400 mt-1">PPN %</p>
                           </td>
                           <td className="p-2 text-center">
                             <button 
