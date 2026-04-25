@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Lock, Unlock, Calendar, AlertCircle } from "lucide-react"
-import { getPeriodLocksAction, lockPeriodAction, unlockPeriodAction } from "../../app/actions/period-lock"
+import { getPeriodLocks, lockPeriod } from "../../app/actions/period-lock"
 
 interface PeriodLock {
   id: string
@@ -36,7 +36,7 @@ export default function PeriodLockManager() {
   }, [])
 
   const loadLocks = async () => {
-    const result = await getPeriodLocksAction()
+    const result = await getPeriodLocks()
     if (result.success) {
       setLocks(result.locks)
     }
@@ -53,7 +53,7 @@ export default function PeriodLockManager() {
     formData.append("lockType", lockForm.lockType)
     formData.append("reason", lockForm.reason)
 
-    const result = await lockPeriodAction(formData)
+    const result = await lockPeriod(formData)
     if (result.success) {
       setShowLockForm(false)
       loadLocks()
@@ -63,6 +63,10 @@ export default function PeriodLockManager() {
   }
 
   const handleUnlock = async (lock: PeriodLock) => {
+    // Unlock functionality not yet implemented in period-lock.ts
+    alert("Fitur unlock period belum tersedia. Silakan hubungi admin.")
+    return
+    /*
     if (!confirm(`Apakah Anda yakin ingin membuka period ${lock.year}-${lock.month || "FULL"}?`)) {
       return
     }
