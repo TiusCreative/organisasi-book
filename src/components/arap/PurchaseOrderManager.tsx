@@ -35,6 +35,7 @@ type PurchaseOrderItemInput = {
   unitPrice: number
   discount: number
   taxRate: number
+  imageUrl?: string
 }
 
 type PurchaseOrderItemRow = {
@@ -91,7 +92,7 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
   }
 
   const handleAddItem = () => {
-    setItems([...items, { description: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 11 }])
+    setItems([...items, { description: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 11, imageUrl: "" }])
   }
 
   const handleRemoveItem = (index: number) => {
@@ -367,49 +368,56 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Items</label>
-                <div className="space-y-2">
+                <div className="space-y-4">
                   {items.map((item, index) => (
-                    <div key={index} className="flex gap-2 items-start">
-                      <Input
-                        type="text"
-                        placeholder="Deskripsi"
-                        value={item.description}
-                        onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                        className="flex-1"
-                        required
+                    <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-3">
+                      <div className="flex gap-2 items-start">
+                        <Input
+                          type="text"
+                          placeholder="Deskripsi"
+                          value={item.description}
+                          onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                          className="flex-1"
+                          required
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Qty"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value))}
+                          className="w-20"
+                          required
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Harga"
+                          value={item.unitPrice}
+                          onChange={(e) => handleItemChange(index, "unitPrice", parseFloat(e.target.value))}
+                          className="w-32"
+                          required
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Diskon %"
+                          value={item.discount}
+                          onChange={(e) => handleItemChange(index, "discount", parseFloat(e.target.value))}
+                          className="w-24"
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => handleRemoveItem(index)}
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-50 mt-1"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                      <ImageUpload 
+                        value={item.imageUrl} 
+                        onChange={(url) => handleItemChange(index, "imageUrl", url)}
+                        folder="catalog"
                       />
-                      <Input
-                        type="number"
-                        placeholder="Qty"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value))}
-                        className="w-20"
-                        required
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Harga"
-                        value={item.unitPrice}
-                        onChange={(e) => handleItemChange(index, "unitPrice", parseFloat(e.target.value))}
-                        className="w-32"
-                        required
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Diskon %"
-                        value={item.discount}
-                        onChange={(e) => handleItemChange(index, "discount", parseFloat(e.target.value))}
-                        className="w-24"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => handleRemoveItem(index)}
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:bg-red-50 mt-1"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
                     </div>
                   ))}
                 </div>
