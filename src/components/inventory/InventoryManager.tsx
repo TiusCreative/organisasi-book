@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
 import { DataTable, ColumnDef } from "@/components/ui/DataTable"
 import { Badge } from "@/components/ui/Badge"
@@ -670,12 +669,12 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
 
       <Modal isOpen={showItemModal} onClose={() => setShowItemModal(false)} title="Tambah Barang + Barcode + Lokasi Rak" maxWidth="3xl">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Select value={itemForm.warehouseId} onChange={(e) => setItemForm({ ...itemForm, warehouseId: e.target.value })}>
+          <select value={itemForm.warehouseId} onChange={(e) => setItemForm({ ...itemForm, warehouseId: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">Pilih Gudang</option>
             {warehouses.map((wh) => (
               <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
             ))}
-          </Select>
+          </select>
           <Input value={itemForm.code} onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })} placeholder="SKU / Kode Barang" />
           <div className="flex gap-2">
             <Input value={itemForm.barcode} onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })} placeholder="Barcode" />
@@ -690,22 +689,22 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
               folder="catalog"
             />
           </div>
-          <Select value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })}>
+          <select value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="GENERAL">Umum</option>
             <option value="COIL">Coil</option>
             <option value="RAW_MATERIAL">Bahan Baku</option>
             <option value="FINISHED_GOOD">Barang Jadi</option>
             <option value="SEMI_FINISHED">Setengah Jadi</option>
-          </Select>
+          </select>
           <Input value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })} placeholder="Satuan (pcs, kg, dll)" />
           <Input value={itemForm.secondaryUnit} onChange={(e) => setItemForm({ ...itemForm, secondaryUnit: e.target.value })} placeholder="Satuan Sekunder (dus, koli, dll)" />
           <Input type="number" value={itemForm.conversionRate} onChange={(e) => setItemForm({ ...itemForm, conversionRate: Number(e.target.value) })} placeholder="Konversi (1 dus = X pcs)" />
-          <Select value={itemForm.valuationMethod} onChange={(e) => setItemForm({ ...itemForm, valuationMethod: e.target.value })}>
+          <select value={itemForm.valuationMethod} onChange={(e) => setItemForm({ ...itemForm, valuationMethod: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="AVERAGE">Rata-rata (Average)</option>
             <option value="FIFO">FIFO</option>
             <option value="LIFO">LIFO</option>
             <option value="STANDARD">Standar (Standard Cost)</option>
-          </Select>
+          </select>
           <Input value={itemForm.shelf} onChange={(e) => setItemForm({ ...itemForm, shelf: e.target.value })} placeholder="Rak (A, B, C)" />
           <Input value={itemForm.row} onChange={(e) => setItemForm({ ...itemForm, row: e.target.value })} placeholder="Baris (1, 2, 3)" />
           <Input value={itemForm.level} onChange={(e) => setItemForm({ ...itemForm, level: e.target.value })} placeholder="Tingkat (1, 2, 3)" />
@@ -728,11 +727,11 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
           <Input value={warehouseForm.code} onChange={(e) => setWarehouseForm({ ...warehouseForm, code: e.target.value })} placeholder="Kode Gudang" />
           <Input value={warehouseForm.name} onChange={(e) => setWarehouseForm({ ...warehouseForm, name: e.target.value })} placeholder="Nama Gudang" />
           <Input value={warehouseForm.location} onChange={(e) => setWarehouseForm({ ...warehouseForm, location: e.target.value })} placeholder="Lokasi" />
-          <Select value={warehouseForm.type} onChange={(e) => setWarehouseForm({ ...warehouseForm, type: e.target.value })}>
+          <select value={warehouseForm.type} onChange={(e) => setWarehouseForm({ ...warehouseForm, type: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="MAIN">MAIN</option>
             <option value="BRANCH">BRANCH</option>
             <option value="TRANSIT">TRANSIT</option>
-          </Select>
+          </select>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="outline" onClick={() => setShowWarehouseModal(false)}>Batal</Button>
@@ -742,12 +741,12 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
 
       <Modal isOpen={showOpnameModal} onClose={() => setShowOpnameModal(false)} title="Stock Opname" maxWidth="xl">
         <div className="grid grid-cols-1 gap-3">
-          <Select value={opnameForm.warehouseId} onChange={(e) => setOpnameForm({ ...opnameForm, warehouseId: e.target.value })}>
+          <select value={opnameForm.warehouseId} onChange={(e) => setOpnameForm({ ...opnameForm, warehouseId: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">Pilih Gudang</option>
             {warehouses.map((wh) => (
               <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
             ))}
-          </Select>
+          </select>
           <Input value={opnameForm.code} onChange={(e) => setOpnameForm({ ...opnameForm, code: e.target.value })} placeholder="Kode SO" />
           <div className="flex gap-2">
             <Input
@@ -761,12 +760,12 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
             <Button variant="outline" type="button" onClick={() => selectOpnameItemByCode(opnameScanValue)}>Cari</Button>
             <Button variant="primary" type="button" onClick={() => openScanner("opname_item")}>Scan</Button>
           </div>
-          <Select value={opnameForm.itemId} onChange={(e) => setOpnameForm({ ...opnameForm, itemId: e.target.value })}>
+          <select value={opnameForm.itemId} onChange={(e) => setOpnameForm({ ...opnameForm, itemId: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">Pilih Barang</option>
             {items.filter((row) => !opnameForm.warehouseId || row.warehouseId === opnameForm.warehouseId).map((row) => (
               <option key={row.id} value={row.id}>{row.code} | {row.name} | Sistem: {row.quantity}</option>
             ))}
-          </Select>
+          </select>
           <Input type="number" value={opnameForm.physicalQty} onChange={(e) => setOpnameForm({ ...opnameForm, physicalQty: Number(e.target.value) })} placeholder="Qty Fisik" />
         </div>
         <div className="mt-5 flex justify-end gap-2">
