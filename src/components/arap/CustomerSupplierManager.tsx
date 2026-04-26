@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Edit2, Trash2, Building2, Truck } from "lucide-react"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Badge } from "@/components/ui/Badge"
+import { Modal } from "@/components/ui/Modal"
 import { getCustomers, getSuppliers, createCustomer, updateCustomer, deleteCustomer, createSupplier, updateSupplier, deleteSupplier } from "../../app/actions/arap"
 
 interface Customer {
@@ -86,40 +90,35 @@ export default function CustomerSupplierManager({ organizationId }: { organizati
     <div className="p-4 sm:p-6 space-y-4">
       {/* Tabs */}
       <div className="flex gap-2">
-        <button
+        <Button
+          variant={activeTab === "customers" ? "primary" : "outline"}
           onClick={() => setActiveTab("customers")}
-          className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === "customers"
-              ? "bg-blue-600 text-white"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
+          className="flex-1"
         >
           Customers
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={activeTab === "suppliers" ? "primary" : "outline"}
           onClick={() => setActiveTab("suppliers")}
-          className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === "suppliers"
-              ? "bg-orange-600 text-white"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
+          className="flex-1"
         >
           Suppliers
-        </button>
+        </Button>
       </div>
 
       {/* Add Button */}
       <div className="flex justify-end">
-        <button
+        <Button
+          variant="secondary"
           onClick={() => {
             setEditingItem(null)
             setShowModal(true)
           }}
-          className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
+          className="flex items-center gap-2"
         >
           <Plus size={16} />
           {activeTab === "customers" ? "Tambah Customer" : "Tambah Supplier"}
-        </button>
+        </Button>
       </div>
 
       {/* List */}
@@ -143,33 +142,32 @@ export default function CustomerSupplierManager({ organizationId }: { organizati
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800">{customer.name}</span>
                       <span className="text-xs text-slate-500">{customer.code}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                          customer.status === "ACTIVE" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                        }`}
-                      >
+                      <Badge variant={customer.status === "ACTIVE" ? "success" : "danger"}>
                         {customer.status}
-                      </span>
+                      </Badge>
                     </div>
                     {customer.email && <div className="text-sm text-slate-600">{customer.email}</div>}
                     {customer.phone && <div className="text-sm text-slate-600">{customer.phone}</div>}
                   </div>
                   <div className="flex gap-2">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         setEditingItem(customer)
                         setShowModal(true)
                       }}
-                      className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
                     >
                       <Edit2 size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(customer.id)}
-                      className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))
@@ -190,33 +188,32 @@ export default function CustomerSupplierManager({ organizationId }: { organizati
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800">{supplier.name}</span>
                       <span className="text-xs text-slate-500">{supplier.code}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                          supplier.status === "ACTIVE" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                        }`}
-                      >
+                      <Badge variant={supplier.status === "ACTIVE" ? "success" : "danger"}>
                         {supplier.status}
-                      </span>
+                      </Badge>
                     </div>
                     {supplier.email && <div className="text-sm text-slate-600">{supplier.email}</div>}
                     {supplier.phone && <div className="text-sm text-slate-600">{supplier.phone}</div>}
                   </div>
                   <div className="flex gap-2">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         setEditingItem(supplier)
                         setShowModal(true)
                       }}
-                      className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
                     >
                       <Edit2 size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(supplier.id)}
-                      className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))
@@ -226,71 +223,52 @@ export default function CustomerSupplierManager({ organizationId }: { organizati
       )}
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">
-              {editingItem ? "Edit" : "Tambah"} {activeTab === "customers" ? "Customer" : "Supplier"}
-            </h3>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama</label>
-                <input
-                  name="name"
-                  defaultValue={editingItem?.name}
-                  required
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input
-                  name="email"
-                  type="email"
-                  defaultValue={editingItem?.email}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Telepon</label>
-                <input
-                  name="phone"
-                  defaultValue={editingItem?.phone}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              {editingItem && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                  <select
-                    name="status"
-                    defaultValue={editingItem?.status}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  >
-                    <option value="ACTIVE">Active</option>
-                    <option value="INACTIVE">Inactive</option>
-                  </select>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
-                >
-                  Simpan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={`${editingItem ? "Edit" : "Tambah"} ${activeTab === "customers" ? "Customer" : "Supplier"}`}
+      >
+        <form onSubmit={handleSave} className="space-y-4">
+          <Input
+            label="Nama"
+            name="name"
+            defaultValue={editingItem?.name}
+            required
+          />
+          <Input
+            label="Email"
+            name="email"
+            type="email"
+            defaultValue={editingItem?.email}
+          />
+          <Input
+            label="Telepon"
+            name="phone"
+            defaultValue={editingItem?.phone}
+          />
+          {editingItem && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+              <select
+                name="status"
+                defaultValue={editingItem?.status}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+          )}
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" variant="secondary" className="flex-1">
+              Simpan
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setShowModal(false)} className="flex-1">
+              Batal
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   )
 }

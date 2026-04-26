@@ -30,6 +30,18 @@ export async function getInventoryItems(organizationId: string, warehouseId?: st
   return items
 }
 
+export async function getWarehouses(organizationId: string) {
+  const { organization } = await requireCurrentOrganization()
+  if (!organization || organization.id !== organizationId) {
+    throw new Error("Unauthorized")
+  }
+
+  return await prisma.warehouse.findMany({
+    where: { organizationId, status: "ACTIVE" },
+    orderBy: { name: "asc" }
+  })
+}
+
 export async function getInventoryMovements(organizationId: string) {
   const { organization } = await requireCurrentOrganization()
   if (!organization || organization.id !== organizationId) {
@@ -101,6 +113,59 @@ export async function createInventoryItem(data: {
 
   revalidatePath("/inventory")
   return item
+}
+
+export async function updateInventoryItem(id: string, data: {
+  organizationId: string
+  code?: string
+  barcode?: string
+  name?: string
+  unit?: string
+  unitCost?: number
+  warehouseId?: string
+}) {
+  const { organization } = await requireWritableCurrentOrganization()
+  if (!organization || organization.id !== data.organizationId) {
+    throw new Error("Unauthorized")
+  }
+
+  const item = await prisma.inventoryItem.update({
+    where: { id, organizationId: data.organizationId },
+    data: {
+      ...(data.code && { code: data.code }),
+      ...(data.barcode !== undefined && { barcode: data.barcode }),
+      ...(data.name && { name: data.name }),
+      ...(data.unit && { unit: data.unit }),
+      ...(data.unitCost !== undefined && { unitCost: data.unitCost }),
+      ...(data.warehouseId && { warehouseId: data.warehouseId }),
+    }
+  })
+
+  revalidatePath("/inventory")
+  return item
+}
+
+export async function deleteInventoryItem(id: string, organizationId: string) {
+  const { organization } = await requireWritableCurrentOrganization()
+  if (!organization || organization.id !== organizationId) {
+    throw new Error("Unauthorized")
+  }
+
+  // Validasi: Tolak penghapusan jika barang sudah ada histori pergerakan stok
+  const movementCount = await prisma.inventoryMovement.count({
+    where: { itemId: id, organizationId }
+  })
+
+  if (movementCount > 0) {
+    throw new Error("Gagal menghapus: Barang ini sudah memiliki histori pergerakan stok.")
+  }
+
+  await prisma.inventoryItem.delete({
+    where: { id, organizationId }
+  })
+
+  revalidatePath("/inventory")
+  return { success: true }
 }
 
 export async function createInventoryMovement(data: {

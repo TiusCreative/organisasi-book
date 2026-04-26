@@ -1,6 +1,13 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
+import { Modal } from "@/components/ui/Modal"
+import { DataTable, ColumnDef } from "@/components/ui/DataTable"
+import { Badge } from "@/components/ui/Badge"
+import { Alert } from "@/components/ui/Alert"
 import BarcodeScannerModal from "@/components/ui/BarcodeScannerModal"
 import {
   completeStockOpname,
@@ -433,15 +440,32 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
         <button onClick={() => setActiveTab("report")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "report" ? "bg-blue-600 text-white" : "bg-slate-100"}`}>
           <Boxes size={16} className="inline mr-1" /> Laporan
         </button>
+        <Button variant={activeTab === "items" ? "primary" : "ghost"} onClick={() => setActiveTab("items")}>
+          <Box size={16} className="inline mr-2" /> Barang
+        </Button>
+        <Button variant={activeTab === "warehouses" ? "primary" : "ghost"} onClick={() => setActiveTab("warehouses")}>
+          <Warehouse size={16} className="inline mr-2" /> Gudang
+        </Button>
+        <Button variant={activeTab === "opname" ? "primary" : "ghost"} onClick={() => setActiveTab("opname")}>
+          <ClipboardCheck size={16} className="inline mr-2" /> Stock Opname
+        </Button>
+        <Button variant={activeTab === "report" ? "primary" : "ghost"} onClick={() => setActiveTab("report")}>
+          <Boxes size={16} className="inline mr-2" /> Laporan
+        </Button>
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       {message && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
+      <div className="space-y-2">
+        {error && <Alert variant="error" onClose={() => setError("")}>{error}</Alert>}
+        {message && <Alert variant="success" onClose={() => setMessage("")}>{message}</Alert>}
+      </div>
 
       {activeTab === "items" && (
         <div className="space-y-3">
           <div className="flex justify-end">
             <button onClick={() => setShowItemModal(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">+ Tambah Barang</button>
+            <Button variant="primary" onClick={() => setShowItemModal(true)}>+ Tambah Barang</Button>
           </div>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
@@ -480,6 +504,27 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
               </table>
             </div>
           </div>
+          <DataTable
+            columns={[
+              { header: "Kode", cell: (row) => <span className="font-semibold text-slate-800">{row.code}</span> },
+              { header: "Barcode", cell: (row) => row.barcode || "-" },
+              { header: "Nama", cell: (row) => row.name },
+              { header: "Stok", cell: (row) => `${row.quantity} ${row.unit}` },
+              { header: "Gudang", cell: (row) => `${row.warehouse?.code} - ${row.warehouse?.name}` },
+              { header: "Nilai", cell: (row) => formatCurrency(row.totalValue) },
+              {
+                header: "Aksi",
+                cell: (row) => (
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => adjustStockQuick(row.id, "IN", 1)}>+1</Button>
+                    <Button size="sm" variant="danger" onClick={() => adjustStockQuick(row.id, "OUT", 1)}>-1</Button>
+                  </div>
+                )
+              }
+            ]}
+            data={items}
+            emptyState={<div className="p-8 text-center text-slate-500">Belum ada barang.</div>}
+          />
         </div>
       )}
 
@@ -487,6 +532,7 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
         <div className="space-y-3">
           <div className="flex justify-end">
             <button onClick={() => setShowWarehouseModal(true)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">+ Tambah Gudang</button>
+            <Button className="bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => setShowWarehouseModal(true)}>+ Tambah Gudang</Button>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {warehouses.map((wh) => (
@@ -504,6 +550,7 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
         <div className="space-y-3">
           <div className="flex justify-end">
             <button onClick={() => setShowOpnameModal(true)} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700">+ Buat Stock Opname</button>
+            <Button className="bg-amber-600 text-white hover:bg-amber-700" onClick={() => setShowOpnameModal(true)}>+ Buat Stock Opname</Button>
           </div>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
@@ -544,6 +591,18 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
               </table>
             </div>
           </div>
+          <DataTable
+            columns={[
+              { header: "Kode", cell: (row) => <span className="font-semibold text-slate-800">{row.code}</span> },
+              { header: "Gudang", cell: (row) => `${row.warehouse?.code} - ${row.warehouse?.name}` },
+              { header: "Tanggal", cell: (row) => formatDate(row.opnameDate) },
+              { header: "Status", cell: (row) => <Badge variant={row.status === "COMPLETED" ? "success" : "warning"}>{row.status}</Badge> },
+              { header: "Selisih", cell: (row) => row.items?.reduce((sum: number, item) => sum + (item.difference || 0), 0) || 0 },
+              { header: "Aksi", cell: (row) => row.status !== "COMPLETED" ? <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => applyStockOpname(row.id)}>Selesaikan</Button> : "-" }
+            ]}
+            data={stockOpnames}
+            emptyState={<div className="p-8 text-center text-slate-500">Belum ada stock opname.</div>}
+          />
         </div>
       )}
 
@@ -553,6 +612,9 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
             <button onClick={shareWhatsapp} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><Send size={16} /> WhatsApp</button>
             <button onClick={printReport} className="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"><Printer size={16} /> Cetak</button>
             <button onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"><FileDown size={16} /> PDF</button>
+            <Button className="bg-green-600 text-white hover:bg-green-700" onClick={shareWhatsapp}><Send size={16} className="mr-2" /> WhatsApp</Button>
+            <Button className="bg-slate-700 text-white hover:bg-slate-800" onClick={printReport}><Printer size={16} className="mr-2" /> Cetak</Button>
+            <Button className="bg-rose-600 text-white hover:bg-rose-700" onClick={downloadPdf}><FileDown size={16} className="mr-2" /> PDF</Button>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -588,143 +650,121 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
                 </tbody>
               </table>
             </div>
+            <DataTable
+              columns={[
+                { header: "Tanggal", cell: (row) => formatDate(row.createdAt) },
+                { header: "Item", cell: (row) => `${row.item?.code} - ${row.item?.name}` },
+                { header: "Barcode", cell: (row) => row.item?.barcode || "-" },
+                { header: "Tipe", cell: (row) => <Badge variant="default">{row.movementType}</Badge> },
+                { header: "Qty", cell: (row) => `${row.quantity} ${row.item?.unit}` },
+                { header: "Ref", cell: (row) => row.reference || "-" },
+              ]}
+              data={movements}
+              emptyState={<div className="p-8 text-center text-slate-500">Belum ada mutasi stok.</div>}
+            />
           </div>
         </div>
       )}
 
-      {showItemModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6">
-            <h3 className="text-lg font-bold text-slate-800">Tambah Barang + Barcode + Lokasi Rak</h3>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <select value={itemForm.warehouseId} onChange={(e) => setItemForm({ ...itemForm, warehouseId: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="">Pilih Gudang</option>
-                {warehouses.map((wh) => (
-                  <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
-                ))}
-              </select>
-              <input value={itemForm.code} onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })} placeholder="SKU / Kode Barang" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <div className="flex gap-2">
-                <input value={itemForm.barcode} onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })} placeholder="Barcode" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                <button
-                  type="button"
-                  onClick={() => openScanner("item_barcode")}
-                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Scan
-                </button>
-              </div>
-              <input value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Nama Barang" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })} placeholder="Kategori" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <select value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="GENERAL">Umum</option>
-                <option value="COIL">Coil</option>
-                <option value="RAW_MATERIAL">Bahan Baku</option>
-                <option value="FINISHED_GOOD">Barang Jadi</option>
-                <option value="SEMI_FINISHED">Setengah Jadi</option>
-              </select>
-              <input value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })} placeholder="Satuan (pcs, kg, dll)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={itemForm.secondaryUnit} onChange={(e) => setItemForm({ ...itemForm, secondaryUnit: e.target.value })} placeholder="Satuan Sekunder (dus, koli, dll)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input type="number" value={itemForm.conversionRate} onChange={(e) => setItemForm({ ...itemForm, conversionRate: Number(e.target.value) })} placeholder="Konversi (1 dus = X pcs)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <select value={itemForm.valuationMethod} onChange={(e) => setItemForm({ ...itemForm, valuationMethod: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="AVERAGE">Rata-rata (Average)</option>
-                <option value="FIFO">FIFO</option>
-                <option value="LIFO">LIFO</option>
-                <option value="STANDARD">Standar (Standard Cost)</option>
-              </select>
-              <input value={itemForm.shelf} onChange={(e) => setItemForm({ ...itemForm, shelf: e.target.value })} placeholder="Rak (A, B, C)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={itemForm.row} onChange={(e) => setItemForm({ ...itemForm, row: e.target.value })} placeholder="Baris (1, 2, 3)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={itemForm.level} onChange={(e) => setItemForm({ ...itemForm, level: e.target.value })} placeholder="Tingkat (1, 2, 3)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={itemForm.bin} onChange={(e) => setItemForm({ ...itemForm, bin: e.target.value })} placeholder="Bin/Kompartemen" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input type="number" value={itemForm.quantity} onChange={(e) => setItemForm({ ...itemForm, quantity: Number(e.target.value) })} placeholder="Qty Awal" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input type="number" value={itemForm.minStock} onChange={(e) => setItemForm({ ...itemForm, minStock: Number(e.target.value) })} placeholder="Min Stock" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input type="number" value={itemForm.maxStock} onChange={(e) => setItemForm({ ...itemForm, maxStock: Number(e.target.value) })} placeholder="Max Stock" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input type="number" value={itemForm.reorderPoint} onChange={(e) => setItemForm({ ...itemForm, reorderPoint: Number(e.target.value) })} placeholder="Reorder Point" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input type="number" value={itemForm.safetyStock} onChange={(e) => setItemForm({ ...itemForm, safetyStock: Number(e.target.value) })} placeholder="Safety Stock" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input type="number" value={itemForm.unitCost} onChange={(e) => setItemForm({ ...itemForm, unitCost: Number(e.target.value) })} placeholder="Harga Modal" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setShowItemModal(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Batal</button>
-              <button onClick={submitCreateItem} disabled={isPending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">Simpan</button>
-            </div>
+      <Modal isOpen={showItemModal} onClose={() => setShowItemModal(false)} title="Tambah Barang + Barcode + Lokasi Rak" maxWidth="3xl">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Select value={itemForm.warehouseId} onChange={(e) => setItemForm({ ...itemForm, warehouseId: e.target.value })}>
+            <option value="">Pilih Gudang</option>
+            {warehouses.map((wh) => (
+              <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
+            ))}
+          </Select>
+          <Input value={itemForm.code} onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })} placeholder="SKU / Kode Barang" />
+          <div className="flex gap-2">
+            <Input value={itemForm.barcode} onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })} placeholder="Barcode" />
+            <Button variant="outline" type="button" onClick={() => openScanner("item_barcode")}>Scan</Button>
           </div>
+          <Input value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Nama Barang" />
+          <Input value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })} placeholder="Kategori" />
+          <Select value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })}>
+            <option value="GENERAL">Umum</option>
+            <option value="COIL">Coil</option>
+            <option value="RAW_MATERIAL">Bahan Baku</option>
+            <option value="FINISHED_GOOD">Barang Jadi</option>
+            <option value="SEMI_FINISHED">Setengah Jadi</option>
+          </Select>
+          <Input value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })} placeholder="Satuan (pcs, kg, dll)" />
+          <Input value={itemForm.secondaryUnit} onChange={(e) => setItemForm({ ...itemForm, secondaryUnit: e.target.value })} placeholder="Satuan Sekunder (dus, koli, dll)" />
+          <Input type="number" value={itemForm.conversionRate} onChange={(e) => setItemForm({ ...itemForm, conversionRate: Number(e.target.value) })} placeholder="Konversi (1 dus = X pcs)" />
+          <Select value={itemForm.valuationMethod} onChange={(e) => setItemForm({ ...itemForm, valuationMethod: e.target.value })}>
+            <option value="AVERAGE">Rata-rata (Average)</option>
+            <option value="FIFO">FIFO</option>
+            <option value="LIFO">LIFO</option>
+            <option value="STANDARD">Standar (Standard Cost)</option>
+          </Select>
+          <Input value={itemForm.shelf} onChange={(e) => setItemForm({ ...itemForm, shelf: e.target.value })} placeholder="Rak (A, B, C)" />
+          <Input value={itemForm.row} onChange={(e) => setItemForm({ ...itemForm, row: e.target.value })} placeholder="Baris (1, 2, 3)" />
+          <Input value={itemForm.level} onChange={(e) => setItemForm({ ...itemForm, level: e.target.value })} placeholder="Tingkat (1, 2, 3)" />
+          <Input value={itemForm.bin} onChange={(e) => setItemForm({ ...itemForm, bin: e.target.value })} placeholder="Bin/Kompartemen" />
+          <Input type="number" value={itemForm.quantity} onChange={(e) => setItemForm({ ...itemForm, quantity: Number(e.target.value) })} placeholder="Qty Awal" />
+          <Input type="number" value={itemForm.minStock} onChange={(e) => setItemForm({ ...itemForm, minStock: Number(e.target.value) })} placeholder="Min Stock" />
+          <Input type="number" value={itemForm.maxStock} onChange={(e) => setItemForm({ ...itemForm, maxStock: Number(e.target.value) })} placeholder="Max Stock" />
+          <Input type="number" value={itemForm.reorderPoint} onChange={(e) => setItemForm({ ...itemForm, reorderPoint: Number(e.target.value) })} placeholder="Reorder Point" />
+          <Input type="number" value={itemForm.safetyStock} onChange={(e) => setItemForm({ ...itemForm, safetyStock: Number(e.target.value) })} placeholder="Safety Stock" />
+          <Input type="number" value={itemForm.unitCost} onChange={(e) => setItemForm({ ...itemForm, unitCost: Number(e.target.value) })} placeholder="Harga Modal" />
         </div>
-      )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowItemModal(false)}>Batal</Button>
+          <Button variant="primary" onClick={submitCreateItem} isLoading={isPending}>Simpan</Button>
+        </div>
+      </Modal>
 
-      {showWarehouseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6">
-            <h3 className="text-lg font-bold text-slate-800">Tambah Gudang / Cabang</h3>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <input value={warehouseForm.code} onChange={(e) => setWarehouseForm({ ...warehouseForm, code: e.target.value })} placeholder="Kode Gudang" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={warehouseForm.name} onChange={(e) => setWarehouseForm({ ...warehouseForm, name: e.target.value })} placeholder="Nama Gudang" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <input value={warehouseForm.location} onChange={(e) => setWarehouseForm({ ...warehouseForm, location: e.target.value })} placeholder="Lokasi" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <select value={warehouseForm.type} onChange={(e) => setWarehouseForm({ ...warehouseForm, type: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="MAIN">MAIN</option>
-                <option value="BRANCH">BRANCH</option>
-                <option value="TRANSIT">TRANSIT</option>
-              </select>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setShowWarehouseModal(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Batal</button>
-              <button onClick={submitCreateWarehouse} disabled={isPending} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">Simpan</button>
-            </div>
-          </div>
+      <Modal isOpen={showWarehouseModal} onClose={() => setShowWarehouseModal(false)} title="Tambah Gudang / Cabang" maxWidth="xl">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Input value={warehouseForm.code} onChange={(e) => setWarehouseForm({ ...warehouseForm, code: e.target.value })} placeholder="Kode Gudang" />
+          <Input value={warehouseForm.name} onChange={(e) => setWarehouseForm({ ...warehouseForm, name: e.target.value })} placeholder="Nama Gudang" />
+          <Input value={warehouseForm.location} onChange={(e) => setWarehouseForm({ ...warehouseForm, location: e.target.value })} placeholder="Lokasi" />
+          <Select value={warehouseForm.type} onChange={(e) => setWarehouseForm({ ...warehouseForm, type: e.target.value })}>
+            <option value="MAIN">MAIN</option>
+            <option value="BRANCH">BRANCH</option>
+            <option value="TRANSIT">TRANSIT</option>
+          </Select>
         </div>
-      )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowWarehouseModal(false)}>Batal</Button>
+          <Button className="bg-indigo-600 text-white hover:bg-indigo-700" onClick={submitCreateWarehouse} isLoading={isPending}>Simpan</Button>
+        </div>
+      </Modal>
 
-      {showOpnameModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6">
-            <h3 className="text-lg font-bold text-slate-800">Stock Opname</h3>
-            <div className="mt-4 grid grid-cols-1 gap-3">
-              <select value={opnameForm.warehouseId} onChange={(e) => setOpnameForm({ ...opnameForm, warehouseId: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="">Pilih Gudang</option>
-                {warehouses.map((wh) => (
-                  <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
-                ))}
-              </select>
-              <input value={opnameForm.code} onChange={(e) => setOpnameForm({ ...opnameForm, code: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <div className="flex gap-2">
-                <input
-                  value={opnameScanValue}
-                  onChange={(e) => setOpnameScanValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") selectOpnameItemByCode(opnameScanValue)
-                  }}
-                  placeholder="Scan/Input barcode atau SKU"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => selectOpnameItemByCode(opnameScanValue)}
-                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cari
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openScanner("opname_item")}
-                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                >
-                  Scan
-                </button>
-              </div>
-              <select value={opnameForm.itemId} onChange={(e) => setOpnameForm({ ...opnameForm, itemId: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="">Pilih Barang</option>
-                {items.filter((row) => !opnameForm.warehouseId || row.warehouseId === opnameForm.warehouseId).map((row) => (
-                  <option key={row.id} value={row.id}>{row.code} | {row.name} | Sistem: {row.quantity}</option>
-                ))}
-              </select>
-              <input type="number" value={opnameForm.physicalQty} onChange={(e) => setOpnameForm({ ...opnameForm, physicalQty: Number(e.target.value) })} placeholder="Qty Fisik" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setShowOpnameModal(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Batal</button>
-              <button onClick={submitStockOpname} disabled={isPending} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700">Simpan Opname</button>
-            </div>
+      <Modal isOpen={showOpnameModal} onClose={() => setShowOpnameModal(false)} title="Stock Opname" maxWidth="xl">
+        <div className="grid grid-cols-1 gap-3">
+          <Select value={opnameForm.warehouseId} onChange={(e) => setOpnameForm({ ...opnameForm, warehouseId: e.target.value })}>
+            <option value="">Pilih Gudang</option>
+            {warehouses.map((wh) => (
+              <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
+            ))}
+          </Select>
+          <Input value={opnameForm.code} onChange={(e) => setOpnameForm({ ...opnameForm, code: e.target.value })} placeholder="Kode SO" />
+          <div className="flex gap-2">
+            <Input
+              value={opnameScanValue}
+              onChange={(e) => setOpnameScanValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") selectOpnameItemByCode(opnameScanValue)
+              }}
+              placeholder="Scan/Input barcode atau SKU"
+            />
+            <Button variant="outline" type="button" onClick={() => selectOpnameItemByCode(opnameScanValue)}>Cari</Button>
+            <Button variant="primary" type="button" onClick={() => openScanner("opname_item")}>Scan</Button>
           </div>
+          <Select value={opnameForm.itemId} onChange={(e) => setOpnameForm({ ...opnameForm, itemId: e.target.value })}>
+            <option value="">Pilih Barang</option>
+            {items.filter((row) => !opnameForm.warehouseId || row.warehouseId === opnameForm.warehouseId).map((row) => (
+              <option key={row.id} value={row.id}>{row.code} | {row.name} | Sistem: {row.quantity}</option>
+            ))}
+          </Select>
+          <Input type="number" value={opnameForm.physicalQty} onChange={(e) => setOpnameForm({ ...opnameForm, physicalQty: Number(e.target.value) })} placeholder="Qty Fisik" />
         </div>
-      )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowOpnameModal(false)}>Batal</Button>
+          <Button className="bg-amber-600 text-white hover:bg-amber-700 border-none" onClick={submitStockOpname} isLoading={isPending}>Simpan Opname</Button>
+        </div>
+      </Modal>
     </div>
   )
 }

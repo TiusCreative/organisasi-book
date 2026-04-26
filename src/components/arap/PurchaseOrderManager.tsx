@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Plus, Share2, Download, FileText, Trash2, Check, X, Printer } from "lucide-react"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Badge } from "@/components/ui/Badge"
+import { Modal } from "@/components/ui/Modal"
+import { DataTable, ColumnDef } from "@/components/ui/DataTable"
 import {
   getPurchaseOrders,
   createPurchaseOrder,
@@ -145,164 +150,185 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
     }).format(amount)
   }
 
+  const getStatusBadge = (status: string) => {
+    const variants: { [key: string]: "success" | "danger" | "warning" | "info" | "default" } = {
+      DRAFT: "default",
+      PENDING_APPROVAL: "warning",
+      APPROVED: "success",
+      REJECTED: "danger",
+      SENT: "info",
+      RECEIVED: "success",
+      PARTIALLY_RECEIVED: "warning",
+      CLOSED: "default",
+    }
+    return <Badge variant={variants[status] || "default"}>{status.replace("_", " ")}</Badge>
+  }
+
+  const columns: ColumnDef<PurchaseOrderRow>[] = [
+    {
+      header: "Detail",
+      cell: (po) => (
+        <div>
+          <div className="font-medium text-slate-800">{po.poNumber}</div>
+          <div className="text-xs text-slate-500">{po.supplier?.name}</div>
+          <div className="text-xs text-slate-500">{new Date(po.orderDate).toLocaleDateString("id-ID")}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Status",
+      cell: (po) => getStatusBadge(po.status),
+    },
+    {
+      header: "Total",
+      cell: (po) => <div className="font-medium">{formatCurrency(Number(po.totalAmount || 0))}</div>,
+      className: "text-right",
+    },
+    {
+      header: "Actions",
+      cell: (po) => (
+        <div className="flex items-center justify-end gap-1">
+          {po.status === "DRAFT" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                submitPurchaseOrderForApproval(po.id).then(loadData).catch((e) => alert(e?.message || String(e)))
+              }}
+              title="Ajukan approval"
+            >
+              Ajukan
+            </Button>
+          )}
+
+          {po.status === "PENDING_APPROVAL" && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                onClick={() => {
+                  const note = window.prompt("Catatan approval (opsional):") || ""
+                  approvePurchaseOrder(po.id, note).then(loadData).catch((e) => alert(e?.message || String(e)))
+                }}
+                title="Approve"
+              >
+                <Check size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-700 hover:bg-red-50 hover:text-red-800"
+                onClick={() => {
+                  const note = window.prompt("Alasan reject (opsional):") || ""
+                  rejectPurchaseOrder(po.id, note).then(loadData).catch((e) => alert(e?.message || String(e)))
+                }}
+                title="Reject"
+              >
+                <X size={16} />
+              </Button>
+            </>
+          )}
+
+          {po.status === "APPROVED" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const formData = new FormData()
+                formData.append("id", po.id)
+                formData.append("status", "SENT")
+                updatePurchaseOrderStatus(formData).then(loadData).catch((e) => alert(e?.message || String(e)))
+              }}
+            >
+              Kirim
+            </Button>
+          )}
+
+          {(po.status === "APPROVED" || po.status === "SENT" || po.status === "PARTIALLY_RECEIVED") && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedPO(po)
+                setShowReceiveModal(true)
+              }}
+            >
+              Terima
+            </Button>
+          )}
+          <Button
+            onClick={() => handleShareWhatsApp(po)}
+            variant="ghost"
+            size="sm"
+            className="text-green-600 hover:bg-green-50"
+            title="Share WhatsApp"
+          >
+            <Share2 size={16} />
+          </Button>
+          
+          {templateHtml ? (
+            <DynamicPrintLayout
+              templateHtml={templateHtml}
+              data={{
+                ...po,
+                date: new Date(po.orderDate).toLocaleDateString("id-ID"),
+                supplierName: po.supplier?.name,
+              }}
+              documentTitle={`PO_${po.poNumber}`}
+              customButton={
+                <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50" title="Cetak PO (Template Custom)"><Printer size={16} /></Button>
+              }
+            />
+          ) : (
+            <Button
+              onClick={() => handleDownloadPDF(po)}
+              variant="ghost"
+              size="sm"
+              className="text-blue-600 hover:bg-blue-50"
+              title="Cetak PO (Template Standar)"
+            >
+              <Download size={16} />
+            </Button>
+          )}
+        </div>
+      ),
+      className: "text-right",
+    },
+  ]
+
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div className="flex justify-end">
-        <button
+        <Button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+          variant="primary"
         >
           <Plus size={16} />
           Buat PO Baru
-        </button>
+        </Button>
       </div>
 
-      {loading ? (
-        <div className="py-8 text-center text-slate-500">Loading...</div>
-      ) : pos.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-500">
-          <FileText size={40} className="mx-auto mb-2 opacity-50" />
-          <p>Belum ada Purchase Order</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {pos.map((po) => (
-            <div
-              key={po.id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-800">{po.poNumber}</span>
-                  <span className="text-xs text-slate-500">{po.supplier?.name}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                      po.status === "DRAFT" ? "bg-slate-100 text-slate-800" :
-                      po.status === "PENDING_APPROVAL" ? "bg-amber-100 text-amber-800" :
-                      po.status === "APPROVED" ? "bg-emerald-100 text-emerald-800" :
-                      po.status === "REJECTED" ? "bg-red-100 text-red-800" :
-                      po.status === "SENT" ? "bg-blue-100 text-blue-800" :
-                      po.status === "RECEIVED" ? "bg-green-100 text-green-800" :
-                      "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {po.status}
-                  </span>
-                </div>
-                <div className="text-sm text-slate-600">
-                  {new Date(po.orderDate).toLocaleDateString("id-ID")}
-                </div>
-                <div className="text-sm font-medium text-slate-800">
-                  Total: {formatCurrency(Number(po.totalAmount || 0))}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleShareWhatsApp(po)}
-                  className="rounded-lg p-2 text-green-600 hover:bg-green-50"
-                  title="Share WhatsApp"
-                >
-                  <Share2 size={16} />
-                </button>
-                
-                {templateHtml ? (
-                  <DynamicPrintLayout
-                    templateHtml={templateHtml}
-                    data={{
-                      ...po,
-                      date: new Date(po.orderDate).toLocaleDateString("id-ID"),
-                      supplierName: po.supplier?.name,
-                    }}
-                    documentTitle={`PO_${po.poNumber}`}
-                    customButton={
-                      <button className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" title="Cetak PO (Template Custom)"><Printer size={16} /></button>
-                    }
-                  />
-                ) : (
-                  <button
-                    onClick={() => handleDownloadPDF(po)}
-                    className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-                    title="Cetak PO (Template Standar)"
-                  >
-                    <Download size={16} />
-                  </button>
-                )}
-                {po.status === "DRAFT" && (
-                  <button
-                    onClick={() => {
-                      submitPurchaseOrderForApproval(po.id).then(loadData).catch((e) => alert(e?.message || String(e)))
-                    }}
-                    className="rounded-lg px-3 py-1.5 text-sm font-bold text-amber-700 hover:bg-amber-50"
-                    title="Ajukan approval"
-                  >
-                    Ajukan
-                  </button>
-                )}
-
-                {po.status === "PENDING_APPROVAL" && (
-                  <>
-                    <button
-                      onClick={() => {
-                        const note = window.prompt("Catatan approval (opsional):") || ""
-                        approvePurchaseOrder(po.id, note).then(loadData).catch((e) => alert(e?.message || String(e)))
-                      }}
-                      className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50"
-                      title="Approve"
-                    >
-                      <Check size={16} />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => {
-                        const note = window.prompt("Alasan reject (opsional):") || ""
-                        rejectPurchaseOrder(po.id, note).then(loadData).catch((e) => alert(e?.message || String(e)))
-                      }}
-                      className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold text-red-700 hover:bg-red-50"
-                      title="Reject"
-                    >
-                      <X size={16} />
-                      Reject
-                    </button>
-                  </>
-                )}
-
-                {po.status === "APPROVED" && (
-                  <button
-                    onClick={() => {
-                      const formData = new FormData()
-                      formData.append("id", po.id)
-                      formData.append("status", "SENT")
-                      updatePurchaseOrderStatus(formData).then(loadData).catch((e) => alert(e?.message || String(e)))
-                    }}
-                    className="rounded-lg px-3 py-1.5 text-sm font-bold text-blue-600 hover:bg-blue-50"
-                  >
-                    Kirim
-                  </button>
-                )}
-
-                {(po.status === "APPROVED" || po.status === "SENT" || po.status === "PARTIALLY_RECEIVED") && (
-                  <button
-                    onClick={() => {
-                      setSelectedPO(po)
-                      setShowReceiveModal(true)
-                    }}
-                    className="rounded-lg px-3 py-1.5 text-sm font-bold text-purple-600 hover:bg-purple-50"
-                  >
-                    Terima
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        data={pos}
+        isLoading={loading}
+        emptyState={
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-500">
+            <FileText size={40} className="mx-auto mb-2 opacity-50" />
+            <p>Belum ada Purchase Order</p>
+          </div>
+        }
+      />
 
       {/* Create PO Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-4xl rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Buat Purchase Order Baru</h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Buat Purchase Order Baru"
+        maxWidth="4xl"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Supplier</label>
@@ -310,31 +336,30 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
                     <select
                       name="supplierId"
                       required
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      className="flex-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors hover:border-slate-400"
                     >
                       <option value="">Pilih Supplier</option>
                       {suppliers.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
-                    <button
+                    <Button
                       type="button"
                       onClick={() => setShowSupplierModal(true)}
-                      className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200"
+                      variant="outline"
                       title="Tambah Supplier Baru"
                     >
                       <Plus size={16} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal Order</label>
-                  <input
+                  <Input
+                    label="Tanggal Order"
                     name="orderDate"
                     type="date"
                     required
                     defaultValue={new Date().toISOString().split("T")[0]}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
                 </div>
               </div>
@@ -344,141 +369,102 @@ export default function PurchaseOrderManager({ organizationId: _organizationId }
                 <div className="space-y-2">
                   {items.map((item, index) => (
                     <div key={index} className="flex gap-2 items-start">
-                      <input
+                      <Input
                         type="text"
                         placeholder="Deskripsi"
                         value={item.description}
                         onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                        className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="flex-1"
                         required
                       />
-                      <input
+                      <Input
                         type="number"
                         placeholder="Qty"
                         value={item.quantity}
                         onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value))}
-                        className="w-20 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-20"
                         required
                       />
-                      <input
+                      <Input
                         type="number"
                         placeholder="Harga"
                         value={item.unitPrice}
                         onChange={(e) => handleItemChange(index, "unitPrice", parseFloat(e.target.value))}
-                        className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-32"
                         required
                       />
-                      <input
+                      <Input
                         type="number"
                         placeholder="Diskon %"
                         value={item.discount}
                         onChange={(e) => handleItemChange(index, "discount", parseFloat(e.target.value))}
-                        className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-24"
                       />
-                      <button
+                      <Button
                         type="button"
                         onClick={() => handleRemoveItem(index)}
-                        className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50 mt-1"
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="mt-2 text-sm text-blue-600 hover:text-blue-700"
-                >
+                <Button type="button" onClick={handleAddItem} variant="ghost" className="mt-2 text-blue-600">
                   + Tambah Item
-                </button>
+                </Button>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Catatan</label>
                 <textarea
                   name="notes"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors hover:border-slate-400"
                   rows={3}
                 />
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                >
+              <div className="flex gap-2 pt-4">
+                <Button type="submit" variant="primary" className="flex-1">
                   Buat PO
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
-                >
+                </Button>
+                <Button type="button" onClick={() => setShowModal(false)} variant="outline" className="flex-1">
                   Batal
-                </button>
+                </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Create Supplier Modal */}
-      {showSupplierModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Tambah Supplier Baru</h3>
-            <form onSubmit={handleCreateSupplier} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama</label>
-                <input
-                  name="name"
-                  required
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input
-                  name="email"
-                  type="email"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Telepon</label>
-                <input
-                  name="phone"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Alamat</label>
-                <textarea
-                  name="address"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  rows={2}
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                >
-                  Simpan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSupplierModal(false)}
-                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showSupplierModal}
+        onClose={() => setShowSupplierModal(false)}
+        title="Tambah Supplier Baru"
+      >
+        <form onSubmit={handleCreateSupplier} className="space-y-4">
+          <Input label="Nama" name="name" required />
+          <Input label="Email" name="email" type="email" />
+          <Input label="Telepon" name="phone" />
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Alamat</label>
+            <textarea
+              name="address"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors hover:border-slate-400"
+              rows={2}
+            />
           </div>
-        </div>
-      )}
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" variant="primary" className="flex-1">
+              Simpan
+            </Button>
+            <Button type="button" onClick={() => setShowSupplierModal(false)} variant="outline" className="flex-1">
+              Batal
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Print Template (Hidden) */}
       <div ref={printRef} className="hidden print:block p-8">
