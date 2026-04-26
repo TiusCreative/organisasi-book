@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Wallet, Landmark, TrendingUp, TrendingDown, FileText, Receipt, Users, Package } from "lucide-react"
+import { Plus, Wallet, Landmark, TrendingUp, TrendingDown, FileText, Receipt, Users, Package, FileBarChart, Briefcase, DollarSign } from "lucide-react"
 import Link from "next/link"
 import TransactionModal from "@/components/TransactionModal"
+import { Card, CardHeader, CardTitle, CardBody, CardFooter } from "@/components/ui/Card"
+import { Button } from "@/components/ui/Button"
 
 export default function DashboardPage() {
   const [activeOrg, setActiveOrg] = useState<any>(null)
@@ -12,6 +14,8 @@ export default function DashboardPage() {
   const [monthlyIncome, setMonthlyIncome] = useState(0)
   const [monthlyExpense, setMonthlyExpense] = useState(0)
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
+  const [pendingInvoices, setPendingInvoices] = useState(0)
+  const [totalSales, setTotalSales] = useState(0)
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -36,6 +40,7 @@ export default function DashboardPage() {
             let bank = 0
             let income = 0
             let expense = 0
+            let sales = 0
             
             transactions.forEach((tx: any) => {
               const txDate = new Date(tx.date)
@@ -54,6 +59,11 @@ export default function DashboardPage() {
                   income += line.debit || 0
                   expense += line.credit || 0
                 }
+                
+                // Calculate total sales (debit to revenue accounts)
+                if (line.account?.category === "REVENUE") {
+                  sales += line.debit || 0
+                }
               })
             })
             
@@ -61,7 +71,11 @@ export default function DashboardPage() {
             setTotalBank(bank)
             setMonthlyIncome(income)
             setMonthlyExpense(expense)
+            setTotalSales(sales)
             setRecentTransactions(transactions.slice(0, 5))
+            
+            // Calculate pending invoices (placeholder - would need actual invoice data)
+            setPendingInvoices(0)
           }
         }
       } catch (error) {
@@ -118,118 +132,173 @@ export default function DashboardPage() {
 
       {/* KARTU METRIK */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600">
-              <Wallet size={24} />
-            </div>
-          </div>
-          <p className="text-sm font-medium text-slate-500 mb-1">Saldo Kas Kecil</p>
-          <h3 className="text-2xl font-bold text-slate-800">
-            {totalCash === 0 ? 'Rp 0' : `Rp ${totalCash.toLocaleString('id-ID')}`}
-          </h3>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Saldo Kas Kecil</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-3xl font-black text-slate-800">
+              {totalCash === 0 ? 'Rp 0' : `Rp ${totalCash.toLocaleString('id-ID')}`}
+            </p>
+          </CardBody>
+        </Card>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
-              <Landmark size={24} />
-            </div>
-          </div>
-          <p className="text-sm font-medium text-slate-500 mb-1">Total Saldo Bank</p>
-          <h3 className="text-2xl font-bold text-slate-800">
-            {totalBank === 0 ? 'Rp 0' : `Rp ${totalBank.toLocaleString('id-ID')}`}
-          </h3>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Saldo Bank</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-3xl font-black text-slate-800">
+              {totalBank === 0 ? 'Rp 0' : `Rp ${totalBank.toLocaleString('id-ID')}`}
+            </p>
+          </CardBody>
+        </Card>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-indigo-50 rounded-lg text-indigo-600">
-              <TrendingUp size={24} />
-            </div>
-          </div>
-          <p className="text-sm font-medium text-slate-500 mb-1">Pemasukan (Bulan Ini)</p>
-          <h3 className="text-2xl font-bold text-slate-800">
-            {monthlyIncome === 0 ? 'Rp 0' : `Rp ${monthlyIncome.toLocaleString('id-ID')}`}
-          </h3>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Pemasukan (Bulan Ini)</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-3xl font-black text-slate-800">
+              {monthlyIncome === 0 ? 'Rp 0' : `Rp ${monthlyIncome.toLocaleString('id-ID')}`}
+            </p>
+            <p className="text-sm font-medium text-emerald-600 mt-2">
+              {monthlyIncome > 0 ? '↑ Dari transaksi bulan ini' : 'Belum ada pemasukan'}
+            </p>
+          </CardBody>
+        </Card>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-rose-50 rounded-lg text-rose-600">
-              <TrendingDown size={24} />
+        <Card>
+          <CardHeader>
+            <CardTitle>Pengeluaran (Bulan Ini)</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-3xl font-black text-slate-800">
+              {monthlyExpense === 0 ? 'Rp 0' : `Rp ${monthlyExpense.toLocaleString('id-ID')}`}
+            </p>
+            <p className="text-sm font-medium text-rose-600 mt-2">
+              {monthlyExpense > 0 ? '↓ Dari transaksi bulan ini' : 'Belum ada pengeluaran'}
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+
+      {/* ADDITIONAL METRICS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Penjualan</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-3xl font-black text-slate-800">
+              {totalSales === 0 ? 'Rp 0' : `Rp ${totalSales.toLocaleString('id-ID')}`}
+            </p>
+            <p className="text-sm font-medium text-emerald-600 mt-2">Total revenue</p>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoice Jatuh Tempo</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-3xl font-black text-slate-800">{pendingInvoices}</p>
+            <p className="text-sm text-slate-500 mt-2">Segera lakukan penagihan kepada pelanggan.</p>
+          </CardBody>
+          <CardFooter>
+            <Button variant="outline" size="sm" className="w-full">
+              Lihat Daftar Invoice
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Laporan Keuangan</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="flex gap-2">
+              <Link href="/laporan/neraca" className="flex-1">
+                <Button variant="outline" size="sm" className="w-full">
+                  <FileBarChart size={16} className="mr-2" /> Neraca
+                </Button>
+              </Link>
+              <Link href="/laporan/laba-rugi" className="flex-1">
+                <Button variant="outline" size="sm" className="w-full">
+                  <TrendingUp size={16} className="mr-2" /> Laba Rugi
+                </Button>
+              </Link>
             </div>
-          </div>
-          <p className="text-sm font-medium text-slate-500 mb-1">Pengeluaran (Bulan Ini)</p>
-          <h3 className="text-2xl font-bold text-slate-800">
-            {monthlyExpense === 0 ? 'Rp 0' : `Rp ${monthlyExpense.toLocaleString('id-ID')}`}
-          </h3>
-        </div>
+          </CardBody>
+        </Card>
       </div>
 
       {/* AREA TRANSAKSI TERAKHIR */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-slate-800">Transaksi Terakhir</h2>
-          {recentTransactions.length > 0 && (
-            <Link href="/transaksi" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-              Lihat Semua
-            </Link>
-          )}
-        </div>
-
-        {recentTransactions.length === 0 ? (
-          <div className="p-8 text-center flex flex-col items-center justify-center text-slate-500">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-slate-400">
-              <FileText size={32} />
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Transaksi Terakhir</CardTitle>
+            {recentTransactions.length > 0 && (
+              <Link href="/transaksi" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                Lihat Semua
+              </Link>
+            )}
+          </div>
+        </CardHeader>
+        <CardBody>
+          {recentTransactions.length === 0 ? (
+            <div className="p-8 text-center flex flex-col items-center justify-center text-slate-500">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-slate-400">
+                <FileText size={32} />
+              </div>
+              <p className="font-medium text-slate-600">Belum ada transaksi</p>
+              <p className="text-sm mt-1 mb-4">Mulai catat pemasukan dan pengeluaran Anda.</p>
+              <TransactionModal 
+                org={activeOrg} 
+                accounts={activeOrg?.accounts || []}
+                bankAccounts={activeOrg?.banks || []}
+                buttonClassName="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+                buttonText={<><Plus size={18} /> Buat Transaksi Baru</>}
+              />
             </div>
-            <p className="font-medium text-slate-600">Belum ada transaksi</p>
-            <p className="text-sm mt-1 mb-4">Mulai catat pemasukan dan pengeluaran Anda.</p>
-            <TransactionModal 
-              org={activeOrg} 
-              accounts={activeOrg?.accounts || []}
-              bankAccounts={activeOrg?.banks || []}
-              buttonClassName="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
-              buttonText={<><Plus size={18} /> Buat Transaksi Baru</>}
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <tbody>
-                {recentTransactions.map((tx, idx) => (
-                  <tr key={tx.id} className={idx > 0 ? 'border-t border-slate-100' : ''}>
-                    <td className="p-6">
-                      <p className="font-medium text-slate-800">{tx.description}</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {new Date(tx.date).toLocaleDateString('id-ID', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </p>
-                    </td>
-                    <td className="p-6 text-right">
-                      <p className="font-bold text-slate-800">
-                        Rp {tx.lines.reduce((sum: number, l: any) => sum + (l.debit || l.credit), 0).toLocaleString('id-ID')}
-                      </p>
-                    </td>
-                    <td className="p-6 text-right">
-                      <Link
-                        href={`/transaksi/${tx.id}`}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Lihat
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <tbody>
+                  {recentTransactions.map((tx, idx) => (
+                    <tr key={tx.id} className={idx > 0 ? 'border-t border-slate-100' : ''}>
+                      <td className="p-6">
+                        <p className="font-medium text-slate-800">{tx.description}</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {new Date(tx.date).toLocaleDateString('id-ID', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </td>
+                      <td className="p-6 text-right">
+                        <p className="font-bold text-slate-800">
+                          Rp {tx.lines.reduce((sum: number, l: any) => sum + (l.debit || l.credit), 0).toLocaleString('id-ID')}
+                        </p>
+                      </td>
+                      <td className="p-6 text-right">
+                        <Link
+                          href={`/transaksi/${tx.id}`}
+                          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Lihat
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardBody>
+      </Card>
     </div>
   )
 }
