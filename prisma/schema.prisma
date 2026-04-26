@@ -619,6 +619,7 @@ model Invoice {
   totalAmount     Float    @default(0)
   paidAmount      Float    @default(0)
   remainingAmount Float    @default(0)
+  imageUrl        String?  // URL gambar invoice (R2)
   status          String   @default("DRAFT") // DRAFT, SENT, PARTIALLY_PAID, PAID, OVERDUE, CANCELLED, RETURNED
   notes           String?
   createdAt       DateTime @default(now())
@@ -776,6 +777,7 @@ model PurchaseOrderItem {
   subtotal        Decimal @db.Decimal(20, 2)
   taxAmount       Decimal @db.Decimal(20, 2)
   total           Decimal @db.Decimal(20, 2)
+  imageUrl        String?  // URL gambar item (R2)
 
   purchaseOrder PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   item          InventoryItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
@@ -1055,6 +1057,7 @@ model Warehouse {
   location       String? // Alamat lokasi
   type           String   @default("MAIN") // MAIN, BRANCH, TRANSIT
   managerId      String? // User ID manager gudang
+  imageUrl       String?  // URL gambar gudang (R2)
   status         String   @default("ACTIVE") // ACTIVE, INACTIVE
   notes          String?
   createdAt      DateTime @default(now())
@@ -1097,6 +1100,7 @@ model InventoryItem {
   safetyStock     Float?   @default(0) // Safety stock
   unitCost        Float    @default(0) // Harga per unit (untuk penilaian stok)
   totalValue      Float    @default(0) // Total nilai stok (quantity * unitCost)
+  imageUrl        String?  // URL gambar barang (R2)
   status          String   @default("ACTIVE") // ACTIVE, INACTIVE
   notes           String?
   createdAt       DateTime @default(now())

@@ -16,6 +16,7 @@ type PurchaseOrderItemInput = {
   unitPrice: number | string
   discount?: number | string
   taxRate?: number | string
+  imageUrl?: string
 }
 
 function assertApproverRole(role: UserRole) {
@@ -110,6 +111,7 @@ export async function createPurchaseOrder(formData: FormData) {
           subtotal: item.subtotal,
           taxAmount: item.taxAmount,
           total: item.total,
+          imageUrl: item.imageUrl || null,
         })),
       },
     },

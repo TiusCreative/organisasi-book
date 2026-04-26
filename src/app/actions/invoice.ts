@@ -21,6 +21,7 @@ export async function createInvoice(formData: FormData) {
   const paymentTerm = parseInt((formData.get("paymentTerm") as string) || "30")
   const dueDate = new Date(invoiceDate)
   dueDate.setDate(dueDate.getDate() + paymentTerm)
+  const imageUrl = (formData.get("imageUrl") as string) || null
   
   const piutangAccountId = formData.get("piutangAccountId") as string
   if (!piutangAccountId) {
@@ -59,6 +60,7 @@ export async function createInvoice(formData: FormData) {
         taxAmount,
         totalAmount,
         remainingAmount: totalAmount,
+        imageUrl,
       },
     })
 

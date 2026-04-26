@@ -46,12 +46,13 @@ export async function createWarehouse(formData: FormData) {
   const managerId = (formData.get("managerId") as string) || null
   const status = formData.get("status") as string
   const notes = formData.get("notes") as string
+  const imageUrl = (formData.get("imageUrl") as string) || null
   
   const count = await prisma.warehouse.count({ where: { organizationId: organization.id } })
   const code = `WH-${String(count + 1).padStart(3, "0")}`
 
   const warehouse = await prisma.warehouse.create({
-    data: { organizationId: organization.id, code, name, location, type, managerId, status, notes }
+    data: { organizationId: organization.id, code, name, location, type, managerId, status, notes, imageUrl }
   })
   
   revalidatePath("/warehouse")
@@ -68,10 +69,11 @@ export async function updateWarehouse(formData: FormData) {
   const managerId = (formData.get("managerId") as string) || null
   const status = formData.get("status") as string
   const notes = formData.get("notes") as string
+  const imageUrl = (formData.get("imageUrl") as string) || null
 
   const warehouse = await prisma.warehouse.update({
     where: { id, organizationId: organization.id },
-    data: { name, location, type, managerId, status, notes }
+    data: { name, location, type, managerId, status, notes, imageUrl }
   })
   
   revalidatePath("/warehouse")
