@@ -125,18 +125,39 @@ export default function DashboardLayout({
     },
   ]
 
-  // Filter visible items
+  // Filter visible items - show all if permissions check fails (fallback)
   const visibleSingleMenuItems = currentUser
-    ? singleMenuItems.filter((item) => hasModulePermission(currentUser, item.permission))
+    ? singleMenuItems.filter((item) => {
+        try {
+          return hasModulePermission(currentUser, item.permission)
+        } catch (e) {
+          console.warn(`Permission check failed for ${item.permission}:`, e)
+          return true // Fallback: show menu if permission check fails
+        }
+      })
     : []
 
   const visibleReportGroups = currentUser
     ? reportMenuGroups
         .map(group => ({
           ...group,
-          items: group.items.filter(item => hasModulePermission(currentUser, item.permission))
+          items: group.items.filter(item => {
+            try {
+              return hasModulePermission(currentUser, item.permission)
+            } catch (e) {
+              console.warn(`Permission check failed for ${item.permission}:`, e)
+              return true
+            }
+          })
         }))
-        .filter(group => group.items.length > 0 && hasModulePermission(currentUser, group.permission))
+        .filter(group => {
+          try {
+            return group.items.length > 0 && hasModulePermission(currentUser, group.permission)
+          } catch (e) {
+            console.warn(`Permission check failed for ${group.permission}:`, e)
+            return group.items.length > 0
+          }
+        })
     : []
 
   const hasAnyReportAccess = visibleReportGroups.length > 0
@@ -146,7 +167,14 @@ export default function DashboardLayout({
         { name: 'Audit Trail', icon: Clock, href: '/audit-trail', permission: 'auditTrail' as ModulePermission },
         { name: 'Admin Organisasi', icon: Shield, href: '/admin', permission: 'organizationAdmin' as ModulePermission },
         { name: 'Pengaturan Organisasi', icon: Settings, href: '/pengaturan', permission: 'organizationSettings' as ModulePermission },
-      ].filter((item) => hasModulePermission(currentUser, item.permission))
+      ].filter((item) => {
+        try {
+          return hasModulePermission(currentUser, item.permission)
+        } catch (e) {
+          console.warn(`Permission check failed for ${item.permission}:`, e)
+          return true
+        }
+      })
     : []
 
   const platformAdminMenuItems = currentUser?.isPlatformAdmin

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input"
 import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
 import { DataTable, ColumnDef } from "@/components/ui/DataTable"
+import ImageUpload from "@/components/ui/ImageUpload"
 import {
   getPurchaseOrders,
   createPurchaseOrder,
