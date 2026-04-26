@@ -82,6 +82,7 @@ export async function createInventoryItem(data: {
   minStock?: number
   maxStock?: number
   unitCost?: number
+  imageUrl?: string
 }) {
   const { organization } = await requireWritableCurrentOrganization()
   if (!organization || organization.id !== data.organizationId) {
@@ -107,7 +108,8 @@ export async function createInventoryItem(data: {
       minStock: data.minStock || 0,
       maxStock: data.maxStock,
       unitCost,
-      totalValue
+      totalValue,
+      imageUrl: data.imageUrl
     }
   })
 

@@ -9,6 +9,7 @@ import { DataTable, ColumnDef } from "@/components/ui/DataTable"
 import { Badge } from "@/components/ui/Badge"
 import { Alert } from "@/components/ui/Alert"
 import BarcodeScannerModal from "@/components/ui/BarcodeScannerModal"
+import ImageUpload from "@/components/ui/ImageUpload"
 import {
   completeStockOpname,
   createInventoryItem,
@@ -126,6 +127,7 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
     reorderPoint: 0,
     safetyStock: 0,
     unitCost: 0,
+    imageUrl: "",
   })
 
   const [warehouseForm, setWarehouseForm] = useState({
@@ -221,6 +223,7 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
           quantity: Number(itemForm.quantity),
           minStock: Number(itemForm.minStock),
           unitCost: Number(itemForm.unitCost),
+          imageUrl: itemForm.imageUrl || undefined,
         })
 
         await refreshAll()
@@ -681,6 +684,13 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
           </div>
           <Input value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Nama Barang" />
           <Input value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })} placeholder="Kategori" />
+          <div className="md:col-span-2">
+            <ImageUpload 
+              value={itemForm.imageUrl} 
+              onChange={(url) => setItemForm({ ...itemForm, imageUrl: url })}
+              folder="catalog"
+            />
+          </div>
           <Select value={itemForm.itemType} onChange={(e) => setItemForm({ ...itemForm, itemType: e.target.value })}>
             <option value="GENERAL">Umum</option>
             <option value="COIL">Coil</option>
