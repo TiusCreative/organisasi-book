@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { createWarehouse, updateWarehouse, deleteWarehouse } from "@/app/actions/warehouse"
 import { X, Plus, Edit, Trash2, MapPin, Building2, User, Package } from "lucide-react"
+import ImageUpload from "@/components/ui/ImageUpload"
 
 export default function WarehouseManager({ warehouses, organizationId }: any) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -13,7 +14,8 @@ export default function WarehouseManager({ warehouses, organizationId }: any) {
     type: "MAIN",
     managerId: "",
     status: "ACTIVE",
-    notes: ""
+    notes: "",
+    imageUrl: ""
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,7 +40,8 @@ export default function WarehouseManager({ warehouses, organizationId }: any) {
       type: "MAIN",
       managerId: "",
       status: "ACTIVE",
-      notes: ""
+      notes: "",
+      imageUrl: ""
     })
     window.location.reload()
   }
@@ -51,7 +54,8 @@ export default function WarehouseManager({ warehouses, organizationId }: any) {
       type: warehouse.type,
       managerId: warehouse.managerId || "",
       status: warehouse.status,
-      notes: warehouse.notes || ""
+      notes: warehouse.notes || "",
+      imageUrl: warehouse.imageUrl || ""
     })
     setIsModalOpen(true)
   }
@@ -224,6 +228,15 @@ export default function WarehouseManager({ warehouses, organizationId }: any) {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={2}
                   className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Foto Gudang (Opsional)</label>
+                <ImageUpload 
+                  value={formData.imageUrl} 
+                  onChange={(url) => setFormData({ ...formData, imageUrl: url })}
+                  folder="catalog"
                 />
               </div>
 
