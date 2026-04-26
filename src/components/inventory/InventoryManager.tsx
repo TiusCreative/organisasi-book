@@ -467,7 +467,6 @@ export default function InventoryManager({ initialItems, warehouses: initialWare
       {activeTab === "items" && (
         <div className="space-y-3">
           <div className="flex justify-end">
-            <button onClick={() => setShowItemModal(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">+ Tambah Barang</button>
             <Button variant="primary" onClick={() => setShowItemModal(true)}>+ Tambah Barang</Button>
           </div>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
