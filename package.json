@@ -9,6 +9,7 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "seed": "tsx prisma/seed.ts",
     "ops:daily": "tsx scripts/run-daily-warehouse-ops.ts",
     "ops:outbox:purge": "tsx scripts/purge-outbox.ts",
     "ops:audit:purge": "tsx scripts/purge-audit-logs.ts",
