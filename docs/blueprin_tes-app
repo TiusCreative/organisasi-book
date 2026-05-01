@@ -1,0 +1,10 @@
+Buatkan skrip seed.ts menggunakan Prisma Client untuk mengisi database lokal. Saya butuh data dummy untuk modul akuntansi dan payroll, setidaknya 10 entitas transaksi ledger dan 5 entitas data karyawan beserta relasinya. Pastikan script ini aman dijalankan berulang kali tanpa membuat duplikat (gunakan upsert atau bersihkan tabel terkait lebih dulu)."
+2. Prompt untuk Menguji Webhook Pembayaran
+Sangat penting untuk menyimulasikan notifikasi dari payment gateway (seperti Midtrans atau Xendit) tanpa harus melakukan transaksi sungguhan.
+"Buatkan skrip Node.js terpisah (misalnya test-webhook.js) yang mengirim HTTP POST request ke endpoint lokal saya di http://localhost:3000/api/webhooks/payment. Gunakan payload JSON standar yang menyimulasikan status transaksi 'settlement' atau 'PAID'. Tolong buatkan juga skenario payload gagal ('expire' atau 'FAILED') agar saya bisa menguji kedua respons tersebut di Next.js API route saya."
+3. Prompt untuk Unit Testing Logika Bisnis
+Gunakan ini untuk menguji fungsi perhitungan (seperti kalkulasi biaya subscription atau potongan payroll) sebelum berinteraksi dengan database.
+"Tuliskan unit test menggunakan Vitest untuk file utilitas kalkulasi ini. Tolong mock fungsi query Prisma Client di dalamnya agar test ini tidak melakukan fetching ke database Supabase lokal dan bisa berjalan cepat. Pastikan untuk menambahkan test case untuk edge cases, seperti ketika user memasukkan nilai null atau nol."
+4. Prompt Otonom (Autonomous Testing & Debugging)
+Jika Anda menggunakan fitur AI yang bisa membaca dan mengeksekusi terminal secara mandiri. Catatan: Batasi scope file yang diuji agar tidak terlalu membebani RAM laptop saat proses Node.js berjalan.
+"Jalankan perintah npm run test di terminal secara spesifik hanya untuk file pengujian subscription. Analisis log error yang muncul, temukan baris kode yang menyebabkan test gagal, perbaiki kodenya secara langsung, dan jalankan ulang test-nya sampai semuanya berstatus pass."

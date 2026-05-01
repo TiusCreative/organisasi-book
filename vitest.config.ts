@@ -31,6 +31,17 @@ export default defineConfig({
           },
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          browser: {
+            enabled: false,
+          },
+          include: ['src/lib/__tests__/**/*.test.ts'],
+          globals: true,
+        },
+      },
     ],
   },
 });
