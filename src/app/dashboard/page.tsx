@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import Link from "next/link"
-import { Wallet, Landmark, TrendingUp, TrendingDown, FileText, Plus, Users, Package, Receipt } from "lucide-react"
+import { Wallet, Landmark, TrendingUp, TrendingDown, FileText, Plus, Users, Package, Receipt, Store } from "lucide-react"
 import TransactionModal from "@/components/forms/TransactionModal"
 import { requireModuleAccess } from "@/lib/auth"
 
@@ -19,6 +19,15 @@ export default async function DashboardPage() {
         transactions: {
           include: { lines: true },
           orderBy: { date: 'desc' },
+          },
+          // Tarik data penjualan POS untuk grafik (7 hari terakhir)
+          posSales: {
+            where: {
+              createdAt: {
+                gte: new Date(new Date().setDate(new Date().getDate() - 7))
+              }
+            },
+            orderBy: { createdAt: 'asc' }
         }
       }
     })
@@ -130,6 +139,29 @@ export default async function DashboardPage() {
     })
   }
 
+  // Menyiapkan Data Grafik Pendapatan POS Harian
+  const posChartData = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return {
+      dateLabel: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+      total: 0,
+      rawDate: d.toISOString().split('T')[0]
+    };
+  });
+
+  if (activeOrg?.posSales) {
+    activeOrg.posSales.forEach((sale) => {
+      const saleDate = new Date(sale.createdAt).toISOString().split('T')[0];
+      const point = posChartData.find((p) => p.rawDate === saleDate);
+      if (point) point.total += sale.total;
+    });
+  }
+  const maxPosTotal = Math.max(...posChartData.map(d => d.total), 1); // Hindari pembagian nol
+  const totalPosSevenDays = posChartData.reduce((sum, day) => sum + day.total, 0)
+  const todayKey = new Date().toISOString().split('T')[0]
+  const todayPosTotal = posChartData.find((day) => day.rawDate === todayKey)?.total || 0
+
   return (
     <div className="max-w-full lg:max-w-6xl mx-auto px-4 sm:px-0 space-y-8">
       {/* HEADER DASHBOARD */}
@@ -226,68 +258,143 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* AREA TRANSAKSI TERAKHIR */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-slate-800">Transaksi Terakhir</h2>
-          {recentTransactions.length > 0 && (
-            <Link href="/transaksi" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-              Lihat Semua
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* WIDGET GRAFIK PENJUALAN POS (7 HARI) */}
+        <div className="lg:col-span-1 bg-white rounded-xl border border-slate-100 shadow-sm p-5 sm:p-6 flex flex-col h-full">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-100 text-blue-600 p-2 rounded-lg">
+                  <Store size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">POS Kasir</h2>
+                  <p className="text-xs text-slate-500">Pendapatan 7 hari terakhir</p>
+                </div>
+              </div>
+              <Link
+                href="/pos"
+                className="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                Buka POS
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Hari ini</p>
+                <p className="mt-1 text-base font-bold text-slate-800">
+                  Rp {todayPosTotal.toLocaleString('id-ID')}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">7 hari</p>
+                <p className="mt-1 text-base font-bold text-slate-800">
+                  Rp {totalPosSevenDays.toLocaleString('id-ID')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 flex h-44 items-end gap-2 border-b border-slate-100 pb-3">
+            {posChartData.map((data, idx) => {
+              const heightPercent = Math.round((data.total / maxPosTotal) * 100) || 2;
+              return (
+                <div key={idx} className="flex-1 flex flex-col justify-end items-center group relative">
+                  {/* Tooltip Hover */}
+                  <div className="absolute -top-8 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-10">
+                    Rp {data.total.toLocaleString('id-ID')}
+                  </div>
+                  {/* Bar Chart */}
+                  <div 
+                    className="w-full bg-blue-200 hover:bg-blue-400 rounded-t-sm transition-all" 
+                    style={{ height: `${heightPercent}%`, minHeight: '4px' }}
+                  ></div>
+                  <span className="text-[10px] text-slate-400 mt-2 truncate w-full text-center">{data.dateLabel.split(' ')[0]}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Link
+              href="/pos/products"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Produk POS
             </Link>
-          )}
+            <Link
+              href="/pos/reports"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Laporan POS
+            </Link>
+          </div>
         </div>
 
-        {recentTransactions.length === 0 ? (
-          <div className="p-8 text-center flex flex-col items-center justify-center text-slate-500">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-slate-400">
-              <FileText size={32} />
+        {/* AREA TRANSAKSI TERAKHIR */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+            <h2 className="text-lg font-bold text-slate-800">Transaksi Terakhir</h2>
+            {recentTransactions.length > 0 && (
+              <Link href="/transaksi" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                Lihat Semua
+              </Link>
+            )}
+          </div>
+
+          {recentTransactions.length === 0 ? (
+            <div className="p-8 text-center flex flex-col items-center justify-center text-slate-500">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-slate-400">
+                <FileText size={32} />
+              </div>
+              <p className="font-medium text-slate-600">Belum ada transaksi</p>
+              <p className="text-sm mt-1 mb-4">Mulai catat pemasukan dan pengeluaran Anda.</p>
+              <TransactionModal 
+                org={activeOrg} 
+                accounts={activeOrg?.accounts || []}
+                bankAccounts={activeOrg?.banks || []}
+                buttonClassName="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+                buttonText={<><Plus size={18} /> Buat Transaksi Baru</>}
+              />
             </div>
-            <p className="font-medium text-slate-600">Belum ada transaksi</p>
-            <p className="text-sm mt-1 mb-4">Mulai catat pemasukan dan pengeluaran Anda.</p>
-            <TransactionModal 
-              org={activeOrg} 
-              accounts={activeOrg?.accounts || []}
-              bankAccounts={activeOrg?.banks || []}
-              buttonClassName="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
-              buttonText={<><Plus size={18} /> Buat Transaksi Baru</>}
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <tbody>
-                {recentTransactions.map((tx, idx) => (
-                  <tr key={tx.id} className={idx > 0 ? 'border-t border-slate-100' : ''}>
-                    <td className="p-6">
-                      <p className="font-medium text-slate-800">{tx.description}</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {new Date(tx.date).toLocaleDateString('id-ID', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </p>
-                    </td>
-                    <td className="p-6 text-right">
-                      <p className="font-bold text-slate-800">
-                        Rp {tx.lines.reduce((sum: number, l) => sum + (l.debit || l.credit), 0).toLocaleString('id-ID')}
-                      </p>
-                    </td>
-                    <td className="p-6 text-right">
-                      <Link
-                        href={`/transaksi/${tx.id}`}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Lihat
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <tbody>
+                  {recentTransactions.map((tx, idx) => (
+                    <tr key={tx.id} className={idx > 0 ? 'border-t border-slate-100' : ''}>
+                      <td className="p-6">
+                        <p className="font-medium text-slate-800">{tx.description}</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {new Date(tx.date).toLocaleDateString('id-ID', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </td>
+                      <td className="p-6 text-right">
+                        <p className="font-bold text-slate-800">
+                          Rp {tx.lines.reduce((sum: number, l) => sum + (l.debit || l.credit), 0).toLocaleString('id-ID')}
+                        </p>
+                      </td>
+                      <td className="p-6 text-right">
+                        <Link
+                          href={`/transaksi/${tx.id}`}
+                          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Lihat
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from 'react'
-import { Menu, X, LayoutDashboard, ReceiptText, FileBarChart, Settings, Building2, ChevronDown, ChevronRight, Landmark, Users, Package, LineChart, BadgePercent, Shield, FileText, Clock, Wrench, Boxes, Target, UserCheck, Truck, DollarSign, PieChart, TrendingUp, Briefcase, Wallet } from 'lucide-react'
+import { Menu, X, LayoutDashboard, ReceiptText, FileBarChart, Settings, Building2, ChevronDown, ChevronRight, Landmark, Users, Package, LineChart, BadgePercent, Shield, FileText, Clock, Wrench, Boxes, Target, UserCheck, Truck, DollarSign, PieChart, TrendingUp, Briefcase, Wallet, ShoppingCart } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { logoutUser } from '../app/actions/auth'
@@ -36,7 +36,7 @@ export default function DashboardLayout({
   } | null
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(['laporan'])
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(['pos', 'laporan'])
   const [isPending, startTransition] = useTransition()
   const pathname = usePathname()
   const router = useRouter()
@@ -125,6 +125,14 @@ export default function DashboardLayout({
     },
   ]
 
+  const posMenuItems: MenuItem[] = [
+    { name: 'Kasir Penjualan', icon: ShoppingCart, href: '/pos', permission: 'pos' },
+    { name: 'Produk POS', icon: Package, href: '/pos/products', permission: 'pos' },
+    { name: 'Laporan POS', icon: FileText, href: '/pos/reports', permission: 'pos' },
+    { name: 'Analytics POS', icon: TrendingUp, href: '/pos/analytics', permission: 'pos' },
+    { name: 'Pengaturan POS', icon: Settings, href: '/pos/settings', permission: 'pos' },
+  ]
+
   // Filter visible items - show all if permissions check fails (fallback)
   const visibleSingleMenuItems = currentUser
     ? singleMenuItems.filter((item) => {
@@ -162,6 +170,11 @@ export default function DashboardLayout({
 
   const hasAnyReportAccess = visibleReportGroups.length > 0
 
+  const visiblePosMenuItems = currentUser
+    ? posMenuItems.filter((item) => hasModulePermission(currentUser, item.permission))
+    : []
+  const isInPosSection = pathname === '/pos' || pathname.startsWith('/pos/')
+
   const organizationAdminMenuItems = currentUser
     ? [
         { name: 'Audit Trail', icon: Clock, href: '/audit-trail', permission: 'auditTrail' as ModulePermission },
@@ -196,6 +209,11 @@ export default function DashboardLayout({
     (pathname.startsWith('/sales') && visibleReportGroups.some(g => g.items.some(i => i.href === '/sales'))) ||
     (pathname.startsWith('/inventory') && visibleReportGroups.some(g => g.items.some(i => i.href === '/inventory'))) ||
     (pathname.startsWith('/pajak') && visibleReportGroups.some(g => g.items.some(i => i.href === '/pajak')))
+
+  const isActiveHref = (href: string) => {
+    if (href === '/pos') return pathname === href
+    return pathname === href || pathname.startsWith(`${href}/`)
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -248,6 +266,48 @@ export default function DashboardLayout({
               </Link>
             )
           })}
+
+          {visiblePosMenuItems.length > 0 && (
+            <div className="pt-2">
+              <button
+                onClick={() => toggleGroup('pos')}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors font-medium pointer-events-auto ${
+                  isInPosSection
+                    ? 'bg-blue-600/20 text-blue-300'
+                    : 'text-gray-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <ShoppingCart size={20} className={isInPosSection ? 'text-blue-300' : 'text-gray-400'} />
+                  <span>POS / Kasir</span>
+                </div>
+                {expandedGroups.includes('pos') ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+
+              {expandedGroups.includes('pos') && (
+                <div className="mt-1 ml-4 space-y-1 border-l-2 border-slate-700 pl-3">
+                  {visiblePosMenuItems.map((item) => {
+                    const isActive = isActiveHref(item.href)
+                    return (
+                      <Link
+                        key={item.name}
+                        href={item.href}
+                        onClick={() => setIsSidebarOpen(false)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isActive
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-400 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <item.icon size={16} />
+                        <span>{item.name}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Grouped Reports Menu */}
           {hasAnyReportAccess && (
